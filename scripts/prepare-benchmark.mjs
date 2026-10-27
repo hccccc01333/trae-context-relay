@@ -122,6 +122,21 @@ async function cloneArm(destination, baseline) {
   assert(branch === "main", `Clone ${destination} is on ${branch}, expected main`);
 }
 
+async function excludeBenchmarkArtifacts(armDir) {
+  // Handoff exports live inside each arm for convenience. Keep them out of
+  // git status so both arms start with the "clean working tree" stated in the
+  // handoff and A's resume verification stays consistent with capture time.
+  const excludePath = path.join(armDir, ".git", "info", "exclude");
+  const existing = (await readFile(excludePath, "utf8")).trimEnd();
+  if (!existing.split(/\r?\n/).includes("benchmark/")) {
+    await writeFile(
+      excludePath,
+      `${existing}${existing.length > 0 ? "\n" : ""}benchmark/\n`,
+      "utf8",
+    );
+  }
+}
+
 async function copyLocalDependencies(armDir) {
   await cp(path.join(REPO_ROOT, "node_modules"), path.join(armDir, "node_modules"), {
     recursive: true,
@@ -413,6 +428,8 @@ async function prepareRun(index, baseline) {
 
   await cloneArm(armA, baseline);
   await cloneArm(armB, baseline);
+  await excludeBenchmarkArtifacts(armA);
+  await excludeBenchmarkArtifacts(armB);
   await copyLocalDependencies(armA);
   await copyLocalDependencies(armB);
 
