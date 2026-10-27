@@ -26,7 +26,7 @@ ContextRelay 的原则是：**上下文可以来自 Agent，但结论必须有�
 | 可验证证据 | 文件 SHA-256、Git HEAD/分支/祖先关系/工作区状态 |
 | 上下文恢复 | `context-relay resume` 生成差异化校验结果和中文恢复提示词 |
 | 增量记忆 | 快照不可变、继承目标与决策、更新任务状态、记录父子差异 |
-| 隐私默认值 | 数据仅存本地；排除密钥、隐藏目录、依赖、构建产物和大文件 |
+| 隐私默认值 | 数据仅存本地；排除密钥、隐藏目录、依赖、构建产物和大文件（`.trae/skills/**` 公开能力文件例外） |
 | TRAE 集成 | 项目级 Skill：`.trae/skills/context-relay/SKILL.md`，内含 `/handoff`、`/resume` 工作流 |
 
 明确不做的事：
@@ -179,7 +179,8 @@ Git 提交只证明版本关系，不证明业务逻辑正确。
 默认排除：
 
 - `.git`、`.context-relay`、其余隐藏目录和隐藏文件；
-- `node_modules`、`vendor`、`dist`、`build`、`coverage` 等生成目录；
+- 例外：`.trae/skills/**` 公开能力文件可进入证据，但其下的敏感文件和隐藏子目录仍会被排除；
+- 依赖、构建、覆盖率和缓存目录；
 - `.env*`、密钥/证书、凭据/秘密目录、数据库文件；
 - 超过 **1 MiB** 的单文件；
 - 每次最多 **40** 个文件证据；
@@ -248,6 +249,8 @@ Skill 内定义了两个命令工作流：
 在 TRAE 中触发 `context-relay` Skill 后使用这两个命令；如果当前 TRAE 版本通过自定义命令面板注册斜杠命令，可将同名命令指向该 Skill。Skill 不依赖 TRAE 私有 API。
 
 通过 npm 安装时，Skill 文件也会随包发布（`node_modules/context-relay/.trae/skills/context-relay/SKILL.md`），可复制到目标项目的 `.trae/skills/context-relay/` 下启用。
+
+`SKILL.md` 位于公开的 `.trae/skills/**` 路径下，可作为文件证据传给 `capture --file` 或结构化 `files`；`.trae` 下的其他配置（如 rules、mcp.json）仍作为隐藏路径排除。
 
 推荐交接流程：
 

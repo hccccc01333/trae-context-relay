@@ -64,7 +64,7 @@ export function buildEvidenceCandidates(input: {
 
     if (isExcludedPath(normalized)) {
       warnings.push(
-        `Evidence path "${normalized}" was skipped by the exclusion policy (hidden, generated, or sensitive paths are never stored).`,
+        `Evidence path "${normalized}" was skipped by the exclusion policy (generated, sensitive, and non-public hidden paths are never stored).`,
       );
       return;
     }

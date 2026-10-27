@@ -21,6 +21,8 @@ describe("evidence exclusion policy", () => {
       "secrets/token.json",
       "src/.hidden/file.ts",
       "private.db",
+      ".trae/settings.json",
+      ".trae/skills",
     ];
 
     for (const file of excluded) {
@@ -33,10 +35,47 @@ describe("evidence exclusion policy", () => {
       "package.json",
       "README.md",
       "docs/architecture.md",
+      ".trae/skills/context-relay/SKILL.md",
+      ".trae/skills/context-relay/references/guide.md",
     ];
     for (const file of included) {
       expect(isExcludedPath(file), file).toBe(false);
     }
+  });
+
+  it("keeps sensitive or hidden files inside public TRAE skills excluded", () => {
+    const excluded = [
+      ".trae/skills/context-relay/.env",
+      ".trae/skills/context-relay/keys/private.pem",
+      ".trae/skills/secrets/token.json",
+      ".trae/skills/.hidden/SKILL.md",
+      ".trae/skills/context-relay/node_modules/pkg/index.js",
+    ];
+    for (const file of excluded) {
+      expect(isExcludedPath(file), file).toBe(true);
+    }
+  });
+
+  it("stores public TRAE skill evidence but not sensitive siblings", () => {
+    const root = path.join(tmpdir(), "context-relay-trae-skill-root");
+    const result = buildEvidenceCandidates({
+      root,
+      explicitFiles: [
+        ".trae/skills/context-relay/SKILL.md",
+        ".trae/skills/context-relay/.env",
+        ".trae/skills/context-relay/keys/private.pem",
+        ".trae/settings.json",
+      ],
+      configFiles: [],
+      git: null,
+    });
+
+    expect(result.candidates.map((candidate) => candidate.relativePath)).toEqual([
+      ".trae/skills/context-relay/SKILL.md",
+    ]);
+    expect(result.warnings.join("\n")).toContain(
+      ".trae/skills/context-relay/.env",
+    );
   });
 
   it("does not store excluded explicit files and rejects path traversal", () => {

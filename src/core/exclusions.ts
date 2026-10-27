@@ -59,6 +59,16 @@ export function isSensitiveFileName(name: string): boolean {
   return SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(name));
 }
 
+// `.trae/skills/**` is public project integration surface, so its files may be
+// recorded as evidence. Hidden subdirectories and sensitive names stay blocked.
+function isPublicTraeSkillPath(segments: string[]): boolean {
+  return (
+    segments.length > 2 &&
+    segments[0]?.toLowerCase() === ".trae" &&
+    segments[1]?.toLowerCase() === "skills"
+  );
+}
+
 export function isExcludedPath(inputPath: string): boolean {
   const normalized = normalizeRelativePath(inputPath);
   if (normalized === ".") {
@@ -71,7 +81,8 @@ export function isExcludedPath(inputPath: string): boolean {
   }
 
   const directories = segments.slice(0, -1);
-  for (const directory of directories) {
+  const publicSkill = isPublicTraeSkillPath(segments);
+  for (const directory of publicSkill ? directories.slice(2) : directories) {
     if (directory.startsWith(".") || isExcludedDirectoryName(directory)) {
       return true;
     }

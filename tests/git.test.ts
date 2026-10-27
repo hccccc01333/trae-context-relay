@@ -30,6 +30,8 @@ describe("parseGitStatus", () => {
         "?? node_modules/pkg/index.js",
         "?? .context-relay/snapshots/x.json",
         "?? private.pem",
+        " M .trae/skills/context-relay/SKILL.md",
+        "?? .trae/settings.json",
         "",
       ].join("\0"),
     );
@@ -45,12 +47,16 @@ describe("parseGitStatus", () => {
     ]);
     expect(parsed.changedFiles).toContain("src/new-name.ts");
     expect(parsed.changedFiles).toContain("src/old-name.ts");
+    expect(parsed.changedFiles).toContain(
+      ".trae/skills/context-relay/SKILL.md",
+    );
     expect(parsed.changedFiles).not.toContain(".env");
     expect(parsed.changedFiles).not.toContain("node_modules/pkg/index.js");
     expect(parsed.changedFiles).not.toContain(
       ".context-relay/snapshots/x.json",
     );
-    expect(parsed.excludedPathCount).toBe(4);
+    expect(parsed.changedFiles).not.toContain(".trae/settings.json");
+    expect(parsed.excludedPathCount).toBe(5);
     expect(parsed.status.clean).toBe(false);
   });
 
