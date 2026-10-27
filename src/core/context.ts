@@ -170,7 +170,7 @@ function mergeDecisions(
             existingRationale || "(no rationale)",
             incomingRationale || "(no rationale)",
             now,
-            `Use supersedes: "${existing.id}" to change this decision explicitly.`,
+            `请使用 supersedes: "${existing.id}" 显式修订该决策。`,
           ),
         );
       }
@@ -252,7 +252,7 @@ function mergeTasks(
               existing.status,
               update.status,
               now,
-              "The previous session claimed completion without functional verification; the reopened state is preserved as a conflict.",
+              "上一会话声明完成但未经功能验证；此处保留重新打开的状态作为冲突。",
             ),
           );
         } else if (
@@ -267,7 +267,7 @@ function mergeTasks(
               existing.status,
               update.status,
               now,
-              "A blocked task was claimed as done without recorded unblock evidence.",
+              "阻塞任务被声明完成，但没有记录解除阻塞的证据。",
             ),
           );
         }

@@ -341,12 +341,24 @@ npm run check       # typecheck + test + build
 - **v0.4**：执行 [Benchmark 协议](docs/experiments/benchmark-protocol.md)，对比 ContextRelay 与 Markdown 摘要的重复任务数和 Token 消耗
 - **v1.0**：完整 TRAE Skill 工作流与可视化界面
 
+## 实验记录
+
+- [v0.2 自我 dogfooding](docs/experiments/v0.2-dogfooding.md)：真实仓库快照、跨进程恢复与 TRAE 新会话验证。
+- [v0.3 自我 dogfooding](docs/experiments/v0.3-dogfooding.md)：任务重新打开、决策 `supersedes`、冲突恢复提示词与 v1 快照迁移。
+- [Benchmark 协议](docs/experiments/benchmark-protocol.md)：ContextRelay vs Markdown 摘要的重复任务数与 Token 对照实验。
+- [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`。
+- [Benchmark 评分表](docs/experiments/benchmark-scorecard.md)：每次运行必须保留的原始指标。
+
+> 正式 Benchmark 数据尚未采集；在真实 A/B 运行完成前，不发布量化结论。
+
 ## 已知限制
 
 - 不读取聊天历史，Agent 必须在交接时显式提供目标和决策；
 - 不会对整个仓库做全量哈希：默认证据来自 `--file`/`files`、Git 工作区变更文件以及 `package.json`/lockfile；已提交但未变更的源码需要显式列出才会进入文件证据；
 - 在 Git 仓库中运行时会以仓库根为项目根，单仓多项目场景暂未细分；
 - `done_claimed` 仅表达声明，不能替代测试或人工验收；
+- 冲突不会自动裁决，必须由用户确认后用 `--resolve-conflict` 或 `resolvedConflicts` 显式关闭；
+- Benchmark 目前只有协议、任务卡与 dogfooding 记录，正式 A/B 数据尚未采集；
 - 快照是线性的，暂不提供跨分支语义检索；
 - 恢复提示词当前为中文。
 

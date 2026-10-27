@@ -418,7 +418,7 @@ describe("cross-session recovery (E2E)", () => {
     ]);
     expect(
       second.warnings.some((warning) =>
-        warning.includes("unresolved context conflict"),
+        warning.includes("未解决上下文冲突"),
       ),
     ).toBe(true);
 

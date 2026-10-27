@@ -324,7 +324,7 @@ export async function captureProject(
       : []),
     ...(conflicts.length > 0
       ? [
-          `Detected ${conflicts.length} unresolved context conflict(s). Review them with resume before continuing.`,
+          `检测到 ${conflicts.length} 个未解决上下文冲突，继续前请先运行 resume 逐条确认。`,
         ]
       : []),
   ]);
