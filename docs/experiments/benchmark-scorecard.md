@@ -1,6 +1,6 @@
 # Benchmark 评分表
 
-每次正式运行复制一份本文件到 `runs/run-XX/scorecard.md`，填写后不得修改原始 transcript、`final.diff`、`test-output.txt` 和用量导出。
+每次正式运行复制一份本文件到 `.benchmark-runs/run-XX/scorecard.md`，填写后不得修改原始 transcript、`final.diff`、`test-output.txt` 和用量导出。`node scripts/prepare-benchmark.mjs` 会自动生成骨架，并预填运行编号、顺序、基线提交、快照 ID、交接材料字符数与决策清单；所有效果指标仍必须来自真实会话。
 
 ## 运行元数据
 

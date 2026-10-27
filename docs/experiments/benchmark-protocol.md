@@ -129,17 +129,24 @@ git tag benchmark-v0.3-base
 为每次运行创建两个独立副本：
 
 ```text
-runs/
+.benchmark-runs/
 ├── run-01/
 │   ├── A/
-│   └── B/
+│   ├── B/
+│   ├── manifest.json
+│   ├── scorecard.md
+│   └── task-card.md
 ├── run-02/
-│   ├── A/
-│   └── B/
 └── run-03/
-    ├── A/
-    └── B/
 ```
+
+`.benchmark-runs/` 是本地隐藏工作目录，已加入 `.gitignore`，也不会进入 ContextRelay 的项目目录树。可以用下面的命令自动完成克隆、构建、H1/H2 捕获、A/B 交接材料和评分表骨架：
+
+```bash
+node scripts/prepare-benchmark.mjs
+```
+
+脚本拒绝在脏工作区运行，并要求再次使用 `--force` 才会删除并重建已有运行目录。它不会执行任何真实会话，也不会填写任何指标。
 
 A 副本保留 H1/H2 快照，因为恢复提示词引用了它们；B 副本只包含源码，**不得包含 A 的 `.context-relay`**。B 组可以在会话中自行创建测试快照。禁止把 A 的快照目录复制给 B，否则 B 可以通过 `resume` 读取 A 的交接材料，控制组会被污染。
 
@@ -174,15 +181,15 @@ A 副本保留生成的 H1/H2 快照。在 B 副本中放置从 H1 编写的 `do
 每次运行填写 [benchmark-scorecard.md](benchmark-scorecard.md)，同时保存：
 
 ```text
-runs/run-01/A/
-├── handoff.txt
+.benchmark-runs/run-01/A/benchmark/
+├── arm-a-handoff.txt
 ├── transcript.md
 ├── final.diff
 ├── test-output.txt
 └── usage.json
 ```
 
-原始记录必须保留，不能只保留汇总数字。
+B 组使用同名结构（`arm-b-handoff.md`）。原始记录必须保留，不能只保留汇总数字。
 
 ## 5. 评分规则
 
@@ -247,6 +254,7 @@ runs/run-01/A/
 | 任务卡 | 已完成 |
 | 评分表 | 已完成 |
 | H1/H2 场景输入 | 已固化为 [benchmark-fixtures](benchmark-fixtures/README.md) |
+| 运行目录准备 | `node scripts/prepare-benchmark.mjs`（生成 3 轮 A/B 副本、交接材料与评分表骨架） |
 | 正式运行 | **0 / 6** |
 | E2 消融 | 未开始 |
 | 结论 | 无。等待真实数据 |

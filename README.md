@@ -31,7 +31,7 @@ ContextRelay 的原则是：**上下文可以来自 Agent，但结论必须有�
 | 决策变更追踪 | 决策带 `revision` / `status` / `supersedes` / `supersededBy`；只有显式 `supersedes` 才能替代旧决策 |
 | 旧快照兼容 | schema v1 快照在读取时自动迁移到 v2，不重写原始文件 |
 | 隐私默认值 | 数据仅存本地；排除密钥、隐藏目录、依赖、构建产物和大文件（`.trae/skills/**` 公开能力文件例外） |
-| TRAE 集成 | 项目级 Skill：`.trae/skills/context-relay/SKILL.md`，内含 `/handoff`、`/resume` 工作流 |
+| TRAE 集成 | 项目级 Skill：`.trae/skills/context-relay/SKILL.md`；原生命令：`.trae/commands/handoff.prompt.md`、`resume.prompt.md` |
 
 明确不做的事：
 
@@ -281,25 +281,28 @@ src/
 │   └── tree.ts            # 受限目录扫描
 └── utils/                 # 路径、文本、ID、哈希
 tests/                     # 单元测试 + 跨进程 E2E
-.trae/skills/context-relay # TRAE 项目级 Skill
+.trae/                     # TRAE 原生命令与项目级 Skill
 ```
 
 ## TRAE 集成
 
-遵循 TRAE 项目级 Skill 目录：
+同时提供项目级 Skill 和 TRAE 原生命令文件：
 
 ```text
-.trae/skills/context-relay/SKILL.md
+.trae/
+├── commands/
+│   ├── handoff.prompt.md   # /handoff
+│   └── resume.prompt.md    # /resume
+└── skills/context-relay/
+    └── SKILL.md            # 工作流 A/B 与证据边界
 ```
-
-Skill 内定义了两个命令工作流：
 
 - `/handoff`：收集显式目标、决策、任务和下一步，调用 `capture`；
 - `/resume`：调用 `resume`，逐项核验证据后继续开发。
 
-在 TRAE 中触发 `context-relay` Skill 后使用这两个命令；如果当前 TRAE 版本通过自定义命令面板注册斜杠命令，可将同名命令指向该 Skill。Skill 不依赖 TRAE 私有 API。
+命令文件使用 TRAE 的 `*.prompt.md` 格式（frontmatter 包含 `name`、`description`、`argument-hint`），正文只引用 Skill 工作流，不复制实现。以项目根目录打开工作区后，TRAE 会从 `.trae/commands/` 加载这些命令；新建聊天后应能在斜杠命令列表中找到它们。如果未出现，重新加载窗口并确认工作区根目录正确。直接描述“保存交接”或“恢复上下文”仍可触发 Skill。两者都不依赖 TRAE 私有 API。
 
-通过 npm 安装时，Skill 文件也会随包发布（`node_modules/context-relay/.trae/skills/context-relay/SKILL.md`），可复制到目标项目的 `.trae/skills/context-relay/` 下启用。
+通过 npm 安装时，命令文件与 Skill 也会随包发布（`node_modules/context-relay/.trae/commands/*.prompt.md`、`node_modules/context-relay/.trae/skills/context-relay/SKILL.md`），可复制到目标项目的 `.trae/` 下启用。
 
 `SKILL.md` 位于公开的 `.trae/skills/**` 路径下，可作为文件证据传给 `capture --file` 或结构化 `files`；`.trae` 下的其他配置（如 rules、mcp.json）仍作为隐藏路径排除。
 
@@ -358,6 +361,7 @@ npm run check       # typecheck + test + build
 - 在 Git 仓库中运行时会以仓库根为项目根，单仓多项目场景暂未细分；
 - `done_claimed` 仅表达声明，不能替代测试或人工验收；
 - 冲突不会自动裁决，必须由用户确认后用 `--resolve-conflict` 或 `resolvedConflicts` 显式关闭；
+- TRAE 原生命令依赖当前工作区根目录下的 `.trae/commands/`；文件格式已按本机 TRAE 运行时校验，但不同版本或旧窗口可能需要在重载后才会显示；
 - Benchmark 目前只有协议、任务卡与 dogfooding 记录，正式 A/B 数据尚未采集；
 - 快照是线性的，暂不提供跨分支语义检索；
 - 恢复提示词当前为中文。

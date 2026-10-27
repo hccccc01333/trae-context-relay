@@ -8,6 +8,18 @@
 | `h2.json` | 复核交接：重开冲突检测任务，并用 `supersedes` 把默认输出改为人类可读 |
 | `arm-b-handoff.md` | B 组使用的普通 Markdown 摘要，来自 H1；不会随 H2 更新 |
 
+## 自动准备
+
+在已提交的干净工作区运行：
+
+```bash
+node scripts/prepare-benchmark.mjs
+```
+
+脚本会在 `.benchmark-runs/run-01..03/` 生成独立的 A/B 副本、H1/H2 快照、两份交接材料、任务卡副本、运行清单和评分表骨架。它不会执行任何 TRAE 会话，也不会填写指标；正式数据仍需人工运行。需要重建时使用 `--force`。
+
+下面是手工复现步骤，用于审计脚本行为或排查 fixture。
+
 ## 可复现步骤
 
 1. 在基线提交上构建：

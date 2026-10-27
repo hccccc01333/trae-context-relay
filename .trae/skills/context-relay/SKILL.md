@@ -102,6 +102,15 @@ node dist/cli.js resume --json
 - `/handoff` → 工作流 A（capture）
 - `/resume` → 工作流 B（resume 并核验）
 
+TRAE 项目级原生命令位于：
+
+```text
+.trae/commands/handoff.prompt.md
+.trae/commands/resume.prompt.md
+```
+
+这两个文件是斜杠命令入口，只引用本 Skill 的工作流 A/B，不复制实现逻辑。命令文件未出现在 TRAE 命令列表时，重新加载窗口并确认工作区根目录包含 `.trae/commands/`；也可以直接描述“保存交接”或“恢复上下文”触发本 Skill。
+
 即使用户没有输入斜杠命令，只要语义是保存或恢复开发上下文，也使用对应工作流。
 
 ## 安全与证据边界

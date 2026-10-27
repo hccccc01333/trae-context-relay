@@ -16,7 +16,8 @@ ContextRelay 解决的是“跨会话恢复依据不可验证”的问题，而�
 ```text
 ┌─────────────────────────────────────────────┐
 │ Integration                                 │
-│ .trae/skills/context-relay + /handoff /resume│
+│ .trae/commands/*.prompt.md                  │
+│ .trae/skills/context-relay/SKILL.md         │
 └──────────────────────┬──────────────────────┘
                        │ CLI invocation
 ┌──────────────────────▼──────────────────────┐
@@ -38,6 +39,8 @@ ContextRelay 解决的是“跨会话恢复依据不可验证”的问题，而�
 ```
 
 `commands/` 只负责参数到服务调用、结果到 stdout 的映射。核心逻辑没有终端依赖，因此后续可以被 Benchmark、Web UI 或其他 Agent 复用。
+
+TRAE 集成层有两类入口：`.trae/commands/*.prompt.md` 是原生斜杠命令，`.trae/skills/context-relay/SKILL.md` 保存完整工作流与安全边界。命令文件只引用 Skill，不复制业务逻辑，避免两处漂移。
 
 ## 3. Capture 流程
 
