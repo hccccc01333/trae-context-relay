@@ -91,7 +91,7 @@ async function pathExists(target) {
   }
 }
 
-async function buildCli() {
+async function ensureLocalToolchain() {
   const compiler = path.join(
     REPO_ROOT,
     "node_modules",
@@ -104,10 +104,17 @@ async function buildCli() {
       "node_modules/typescript is missing. Run npm install before preparing benchmark runs.",
     );
   }
-  runProcess(process.execPath, [compiler, "-p", "tsconfig.build.json"]);
+}
+
+async function buildArmCli(armDir) {
+  // Build from the tagged baseline source, not from a possibly newer dist/.
+  const compiler = path.join(armDir, "node_modules", "typescript", "bin", "tsc");
+  runProcess(process.execPath, [compiler, "-p", "tsconfig.build.json"], {
+    cwd: armDir,
+  });
   assert(
-    await pathExists(path.join(REPO_ROOT, "dist", "cli.js")),
-    "Build finished but dist/cli.js is still missing.",
+    await pathExists(path.join(armDir, "dist", "cli.js")),
+    `${armDir} build finished but dist/cli.js is still missing.`,
   );
 }
 
@@ -138,12 +145,11 @@ async function excludeBenchmarkArtifacts(armDir) {
 }
 
 async function copyLocalDependencies(armDir) {
-  await cp(path.join(REPO_ROOT, "node_modules"), path.join(armDir, "node_modules"), {
-    recursive: true,
-  });
-  await cp(path.join(REPO_ROOT, "dist"), path.join(armDir, "dist"), {
-    recursive: true,
-  });
+  await cp(
+    path.join(REPO_ROOT, "node_modules"),
+    path.join(armDir, "node_modules"),
+    { recursive: true },
+  );
 }
 
 function captureArm(armDir, fixture) {
@@ -385,7 +391,7 @@ function renderGuide({ runId, order, baseline, h1, h2, aChars, bChars }) {
 1. 在 TRAE 中新建一个真实会话，工作区打开 \`${runId}/A\`。
 2. 原样粘贴 \`A/benchmark/arm-a-handoff.txt\` 的全部内容。
 3. 再原样粘贴本目录的 \`task-card.md\` 全文。
-4. 除界面操作外不要补充提示、解释或纠偏。
+4. 除界面操作外不要补充提示、解释或纠偏。仅当 Agent 要求确认未解决冲突时，只回复：“确认按交接材料中的新状态继续，不修改历史快照。”并在评分表记录一次额外提示。
 5. 会话结束后保存：
    - \`A/benchmark/transcript.md\`
    - \`A/benchmark/final.diff\`（在该工作目录运行 \`git diff\`）
@@ -432,6 +438,8 @@ async function prepareRun(index, baseline) {
   await excludeBenchmarkArtifacts(armB);
   await copyLocalDependencies(armA);
   await copyLocalDependencies(armB);
+  await buildArmCli(armA);
+  await buildArmCli(armB);
 
   const h1 = captureArm(armA, "h1.json");
   validateH1(h1);
@@ -562,8 +570,15 @@ async function main() {
     );
   }
 
-  const baseline = git(["rev-parse", "HEAD"]);
-  await buildCli();
+  let baseline;
+  try {
+    baseline = git(["rev-parse", "benchmark-v0.3-base^{commit}"]);
+  } catch {
+    fail(
+      "Missing benchmark-v0.3-base tag. Create a clean v0.3 baseline tag before preparing runs.",
+    );
+  }
+  await ensureLocalToolchain();
   await mkdir(RUNS_ROOT, { recursive: true });
 
   const prepared = [];
