@@ -1,0 +1,56 @@
+{
+  "goal": "Implement the context-relay diff command on top of v0.3 snapshots",
+  "decisions": [
+    {
+      "summary": "Snapshots are immutable; every capture writes a new JSON/Markdown pair",
+      "rationale": "Keep historical decisions and evidence auditable"
+    },
+    {
+      "summary": "Diff reuses the existing SnapshotDelta; no new schema or database",
+      "rationale": "One delta model keeps stored and computed diffs consistent"
+    },
+    {
+      "summary": "Diff defaults to JSON only for scriptability",
+      "rationale": "Scripts are the primary consumer"
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Implement conflict tracking and task history",
+      "status": "done_claimed",
+      "notes": "Conflict detection, task statusHistory, and decision revisions are implemented"
+    },
+    {
+      "title": "Add v1 to v2 snapshot migration",
+      "status": "done_claimed",
+      "notes": "Old snapshots load through an in-memory migration"
+    },
+    {
+      "title": "Implement the diff command",
+      "status": "todo",
+      "notes": "Not started"
+    }
+  ],
+  "nextSteps": [
+    "Implement the diff command",
+    "Run npm run check before claiming completion"
+  ],
+  "notes": [
+    "v0.3 core is complete at the benchmark baseline.",
+    "Do not modify existing snapshot files."
+  ],
+  "files": [
+    "src/core/context.ts",
+    "src/core/schema.ts",
+    "src/core/migrations.ts",
+    "src/core/capture.ts",
+    "src/core/render.ts",
+    "src/cli.ts",
+    "tests/context.test.ts",
+    "tests/migrations.test.ts",
+    "tests/e2e-session.test.ts",
+    "README.md",
+    "docs/architecture.md",
+    ".trae/skills/context-relay/SKILL.md"
+  ]
+}

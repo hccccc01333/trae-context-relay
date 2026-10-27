@@ -1,0 +1,27 @@
+{
+  "decisions": [
+    {
+      "summary": "Diff defaults to a human-readable summary; --json is opt-in",
+      "rationale": "A new session should read the default output without extra flags",
+      "supersedes": "dec_d1c16f14d412"
+    },
+    {
+      "summary": "Diff reuses the existing SnapshotDelta; no new schema or database",
+      "rationale": "Keep one delta model so stored and computed diffs cannot drift"
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Implement conflict tracking and task history",
+      "status": "in_progress",
+      "notes": "Review found an unresolved edge case in conflict resolution"
+    }
+  ],
+  "nextSteps": [
+    "Implement the diff command",
+    "Re-verify conflict tracking after the edge case is fixed"
+  ],
+  "notes": [
+    "Review reopened the conflict-tracking task and revised the default output decision."
+  ]
+}

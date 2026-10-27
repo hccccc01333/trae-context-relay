@@ -148,13 +148,13 @@ runs/
 在 A 副本中：
 
 ```bash
-node dist/cli.js capture --input benchmark/h1.json
+node dist/cli.js capture --input docs/experiments/benchmark-fixtures/h1.json
 # 执行复核变更，再 capture H2
-node dist/cli.js capture --input benchmark/h2.json
+node dist/cli.js capture --input docs/experiments/benchmark-fixtures/h2.json
 node dist/cli.js resume > benchmark/arm-a-handoff.txt
 ```
 
-在 B 副本中放置从 H1 编写的 `benchmark/arm-b-handoff.md`。两份材料都不得包含任务卡以外的提示。
+在 B 副本中放置从 H1 编写的 `docs/experiments/benchmark-fixtures/arm-b-handoff.md`，复制为 `benchmark/arm-b-handoff.md`。两份材料都不得包含任务卡以外的提示。完整步骤见 [benchmark-fixtures/README.md](benchmark-fixtures/README.md)。
 
 ### 4.3 运行新会话
 
@@ -246,7 +246,7 @@ runs/run-01/A/
 | 协议 | 已完成（本文档） |
 | 任务卡 | 已完成 |
 | 评分表 | 已完成 |
-| H1/H2 场景脚本 | 待固化 |
+| H1/H2 场景输入 | 已固化为 [benchmark-fixtures](benchmark-fixtures/README.md) |
 | 正式运行 | **0 / 6** |
 | E2 消融 | 未开始 |
 | 结论 | 无。等待真实数据 |
