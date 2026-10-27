@@ -352,7 +352,7 @@ npm run check       # typecheck + test + build
 - [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`。
 - [Benchmark 评分表](docs/experiments/benchmark-scorecard.md)：每次运行必须保留的原始指标。
 
-> 正式 Benchmark 数据尚未采集；在真实 A/B 运行完成前，不发布量化结论。
+> 已完成 1 轮有效 A/B（run-02，两边均通过验收）与 run-01 的 1 次有效 A 会话；样本仍不足以发布量化结论，Token 用量不可得。
 
 ## 已知限制
 
@@ -362,7 +362,7 @@ npm run check       # typecheck + test + build
 - `done_claimed` 仅表达声明，不能替代测试或人工验收；
 - 冲突不会自动裁决，必须由用户确认后用 `--resolve-conflict` 或 `resolvedConflicts` 显式关闭；
 - TRAE 原生命令依赖当前工作区根目录下的 `.trae/commands/`；文件格式已按本机 TRAE 运行时校验，但不同版本或旧窗口可能需要在重载后才会显示；
-- Benchmark 目前只有协议、任务卡与 dogfooding 记录，正式 A/B 数据尚未采集；
+- Benchmark 已跑 run-02（A/B 有效）与 run-01（B 无效）；任务卡混杂使 H1/H2 仍不可判定，正式量化结论尚未发布；
 - 快照是线性的，暂不提供跨分支语义检索；
 - 恢复提示词当前为中文。
 
