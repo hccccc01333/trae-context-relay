@@ -5,6 +5,8 @@ import type {
   ResumeResult,
 } from "./resume-types.js";
 import type {
+  Conflict,
+  Decision,
   Snapshot,
   SnapshotContext,
   Task,
@@ -25,6 +27,82 @@ const GIT_RELATION_LABELS: Record<GitVerification["relation"], string> = {
   rewound: "HEAD 被回退",
   unavailable: "Git 状态无法验证",
 };
+
+const CONFLICT_KIND_LABELS: Record<Conflict["kind"], string> = {
+  task_reopened: "任务被重新打开",
+  task_completed_from_blocked: "阻塞任务被声明完成",
+  decision_conflict: "决策理由冲突",
+};
+
+function renderDecision(decision: Decision): string {
+  const rationale = decision.rationale
+    ? `\n  - 原因：${decision.rationale}`
+    : "";
+  if (decision.status === "superseded") {
+    const supersededBy = decision.supersededBy
+      ? `，被 ${codeSpan(decision.supersededBy)} 替代`
+      : "";
+    return `- ${decision.summary}（${codeSpan(decision.id)}，rev ${decision.revision}${supersededBy}）${rationale}`;
+  }
+  const supersedes = decision.supersedes
+    ? `，替代 ${codeSpan(decision.supersedes)}`
+    : "";
+  return `- ${decision.summary}（${codeSpan(decision.id)}，rev ${decision.revision}${supersedes}）${rationale}`;
+}
+
+function renderDecisions(context: SnapshotContext): string {
+  const active = context.decisions.filter(
+    (decision) => decision.status === "active",
+  );
+  const superseded = context.decisions.filter(
+    (decision) => decision.status === "superseded",
+  );
+
+  const sections = [
+    active.length === 0
+      ? "未记录。"
+      : active.map(renderDecision).join("\n"),
+  ];
+
+  if (superseded.length > 0) {
+    sections.push(
+      "",
+      "### 已被替代的决策（仅保留历史，不要继续执行）",
+      superseded.map(renderDecision).join("\n"),
+    );
+  }
+
+  return sections.join("\n");
+}
+
+function renderTask(task: Task): string {
+  const notes = task.notes ? ` — ${task.notes}` : "";
+  const history =
+    task.statusHistory.length > 1
+      ? `\n  - 状态历史：${task.statusHistory
+          .map((entry) => entry.to)
+          .join(" → ")}`
+      : "";
+  return `- [${TASK_STATUS_LABELS[task.status]}] ${task.title}${notes}${history}`;
+}
+
+function renderConflicts(conflicts: Conflict[]): string {
+  if (conflicts.length === 0) {
+    return "无。";
+  }
+  return conflicts
+    .map((conflict) => {
+      const note = conflict.note ? `\n  - 说明：${conflict.note}` : "";
+      return [
+        `- [${CONFLICT_KIND_LABELS[conflict.kind]}] ${conflict.subjectLabel}（${codeSpan(conflict.id)}）`,
+        `  - 冲突主体：${codeSpan(conflict.subjectId)}`,
+        `  - 旧状态：${conflict.previous}`,
+        `  - 新状态：${conflict.incoming}`,
+        `  - 检测时间：${conflict.detectedAt}`,
+      ].join("\n") + note;
+    })
+    .join("\n");
+}
 
 function codeSpan(value: string): string {
   const fence = value.includes("`") ? "``" : "`";
@@ -86,27 +164,10 @@ function renderGitSection(snapshot: Snapshot): string {
 }
 
 function renderContextSections(context: SnapshotContext): string {
-  const decisions =
-    context.decisions.length === 0
-      ? "未记录。"
-      : context.decisions
-          .map((decision) => {
-            const rationale = decision.rationale
-              ? `\n  - 原因：${decision.rationale}`
-              : "";
-            return `- ${decision.summary}${rationale}`;
-          })
-          .join("\n");
-
   const tasks =
     context.tasks.length === 0
       ? "未记录。"
-      : context.tasks
-          .map((task) => {
-            const notes = task.notes ? ` — ${task.notes}` : "";
-            return `- [${TASK_STATUS_LABELS[task.status]}] ${task.title}${notes}`;
-          })
-          .join("\n");
+      : context.tasks.map(renderTask).join("\n");
 
   const nextSteps =
     context.nextSteps.length === 0
@@ -122,8 +183,8 @@ function renderContextSections(context: SnapshotContext): string {
     "## 项目目标",
     context.goal ?? "未记录明确目标。",
     "",
-    "## 关键决策",
-    decisions,
+    "## 关键决策（当前有效）",
+    renderDecisions(context),
     "",
     "## 任务状态（上一会话自述，不是验证事实）",
     tasks,
@@ -149,12 +210,21 @@ function renderDelta(snapshot: Snapshot): string {
     `- 哈希变化文件：${delta.evidenceChanged.length}`,
     `- 移除文件证据：${delta.evidenceRemoved.length}`,
     `- 新增决策：${delta.decisionsAdded.length}`,
+    `- 决策状态变化：${delta.decisionChanges.length}`,
     `- 新增任务：${delta.tasksAdded.length}`,
     `- 任务状态变化：${delta.taskStatusChanges.length}`,
+    `- 新增冲突：${delta.conflictsAdded.length}`,
   ];
 
   if (delta.evidenceChanged.length > 0) {
     lines.push(`\n哈希变化：\n${pathList(delta.evidenceChanged, 20)}`);
+  }
+  if (delta.decisionChanges.length > 0) {
+    const changes = delta.decisionChanges.map(
+      (change) =>
+        `- ${change.summary}: ${change.from} → ${change.to}`,
+    );
+    lines.push(`\n决策状态变化：\n${changes.join("\n")}`);
   }
   if (delta.taskStatusChanges.length > 0) {
     const changes = delta.taskStatusChanges.map(
@@ -162,6 +232,18 @@ function renderDelta(snapshot: Snapshot): string {
         `- ${change.title}: ${change.from ?? "none"} → ${change.to}`,
     );
     lines.push(`\n任务状态变化：\n${changes.join("\n")}`);
+  }
+  if (delta.conflictsAdded.length > 0) {
+    const conflictsById = new Map(
+      snapshot.conflicts.map((conflict) => [conflict.id, conflict]),
+    );
+    const conflicts = delta.conflictsAdded.map((id) => {
+      const conflict = conflictsById.get(id);
+      return conflict
+        ? `- [${CONFLICT_KIND_LABELS[conflict.kind]}] ${conflict.subjectLabel}（${codeSpan(id)}）`
+        : `- ${codeSpan(id)}`;
+    });
+    lines.push(`\n新增冲突：\n${conflicts.join("\n")}`);
   }
 
   return lines.join("\n");
@@ -220,6 +302,10 @@ export function renderSnapshotMarkdown(snapshot: Snapshot): string {
     "> 验证边界：文件证据只能证明文件在快照时刻存在且哈希一致；不能证明测试通过、功能可用或代码质量达标。",
     "",
     renderContextSections(snapshot.context),
+    "",
+    `## 未解决冲突（${snapshot.conflicts.length}）`,
+    "",
+    renderConflicts(snapshot.conflicts),
     "",
     "## Git 状态",
     renderGitSection(snapshot),
@@ -341,12 +427,7 @@ function renderTasks(tasks: Task[]): string {
   if (tasks.length === 0) {
     return "未记录任务。";
   }
-  return tasks
-    .map((task) => {
-      const notes = task.notes ? ` — ${task.notes}` : "";
-      return `- [${TASK_STATUS_LABELS[task.status]}] ${task.title}${notes}`;
-    })
-    .join("\n");
+  return tasks.map(renderTask).join("\n");
 }
 
 function packageScripts(snapshot: Snapshot): string {
@@ -394,6 +475,8 @@ export function renderResumePrompt(result: ResumeResult, snapshot: Snapshot): st
     "- 不要把任务列表中的“声明完成”当作已完成。它只是上一会话的自述。",
     "- 文件 SHA-256 验证成功只表示文件内容与快照一致，不代表测试通过或功能可用。",
     "- 遇到标记为“已变化”“缺失”“无法验证”的证据时，先检查现状，不要假设旧结论仍然成立。",
+    "- 快照中的“未解决冲突”不能由你自行裁决；必须逐条向用户确认后再继续。",
+    "- 已被替代（superseded）的决策只用于理解历史，不要继续执行；当前有效决策以 status=active 为准。",
     "- 不要在没有明确理由并征得用户同意的情况下推翻“关键决策”。",
     "- 未经实际运行测试或用户确认，不得声称功能已完成。",
     "",
@@ -415,11 +498,16 @@ export function renderResumePrompt(result: ResumeResult, snapshot: Snapshot): st
       result.evidence.summary.missing
     }；无法验证 ${result.evidence.summary.unverifiable}`,
     `- Git：${GIT_RELATION_LABELS[result.git.relation]}`,
+    `- 未解决冲突：${result.conflicts.length}`,
     "- 功能验证：未验证",
     "",
     "## 项目目标",
     "",
     result.context.goal ?? "快照没有记录明确目标。开始前先与用户确认目标。",
+    "",
+    "## 未解决冲突（必须先与用户确认）",
+    "",
+    renderConflicts(result.conflicts),
     "",
     "## Git 核验",
     "",
@@ -441,16 +529,7 @@ export function renderResumePrompt(result: ResumeResult, snapshot: Snapshot): st
     "",
     "## 关键决策（必须保留，除非用户明确同意变更）",
     "",
-    result.context.decisions.length === 0
-      ? "未记录。"
-      : result.context.decisions
-          .map((decision) => {
-            const rationale = decision.rationale
-              ? `\n  - 原因：${decision.rationale}`
-              : "";
-            return `- ${decision.summary}${rationale}`;
-          })
-          .join("\n"),
+    renderDecisions(result.context),
     "",
     "## 任务状态（仅为声明，不是事实）",
     "",
@@ -480,9 +559,10 @@ export function renderResumePrompt(result: ResumeResult, snapshot: Snapshot): st
     "",
     "1. 运行 `git status`，并核对上面的 Git 关系与工作区差异。",
     "2. 检查所有“已变化”“缺失”“无法验证”的文件，先理解差异，再决定任务是否仍然有效。",
-    "3. 向用户复述当前目标、要保留的技术决策和下一步；若快照信息与现状冲突，先提出冲突。",
-    "4. 只从已确认的下一步继续，不要重复实现快照中已经存在的同一功能。",
-    "5. 若声称任务完成，必须先实际运行相关测试或命令，并报告真实结果。",
+    "3. 若存在“未解决冲突”，逐条向用户确认事实与处理方式；不要自行选择旧状态或新状态继续开发。",
+    "4. 向用户复述当前目标、仍然有效的技术决策和下一步；已被替代的决策不要执行。",
+    "5. 只从已确认的下一步继续，不要重复实现快照中已经存在的同一功能。",
+    "6. 若声称任务完成，必须先实际运行相关测试或命令，并报告真实结果。",
     "",
     "## 验证边界",
     "",

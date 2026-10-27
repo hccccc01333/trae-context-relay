@@ -18,6 +18,7 @@ import {
   CaptureInputFileSchema,
   SnapshotSchema,
   type CaptureInputFile,
+  type Conflict,
   type Snapshot,
   type SnapshotContext,
   type SnapshotDelta,
@@ -38,6 +39,7 @@ export interface CaptureOptions {
   nextSteps?: string[];
   notes?: string[];
   files?: string[];
+  resolvedConflicts?: string[];
 }
 
 export interface CaptureResult {
@@ -48,6 +50,7 @@ export interface CaptureResult {
   handoffPath: string;
   relativeJsonPath: string;
   relativeMarkdownPath: string;
+  resolvedConflicts: string[];
   warnings: string[];
 }
 
@@ -120,6 +123,7 @@ function buildDelta(
     context: SnapshotContext;
     evidence: Snapshot["evidence"];
     git: Snapshot["git"];
+    conflicts: Conflict[];
   },
 ): SnapshotDelta | null {
   if (parent === null) {
@@ -148,9 +152,26 @@ function buildDelta(
   const parentDecisionIds = new Set(
     parent.context.decisions.map((decision) => decision.id),
   );
+  const parentDecisions = new Map(
+    parent.context.decisions.map((decision) => [decision.id, decision]),
+  );
   const decisionsAdded = current.context.decisions
     .filter((decision) => !parentDecisionIds.has(decision.id))
     .map((decision) => decision.id);
+  const decisionChanges = current.context.decisions.flatMap((decision) => {
+    const previous = parentDecisions.get(decision.id);
+    if (previous === undefined || previous.status === decision.status) {
+      return [];
+    }
+    return [
+      {
+        decisionId: decision.id,
+        summary: decision.summary,
+        from: previous.status,
+        to: decision.status,
+      },
+    ];
+  });
 
   const parentTaskIds = new Set(parent.context.tasks.map((task) => task.id));
   const parentTasks = new Map(
@@ -174,14 +195,23 @@ function buildDelta(
     ];
   });
 
+  const parentConflictIds = new Set(
+    (parent.conflicts ?? []).map((conflict) => conflict.id),
+  );
+  const conflictsAdded = current.conflicts
+    .filter((conflict) => !parentConflictIds.has(conflict.id))
+    .map((conflict) => conflict.id);
+
   return {
     parentId: parent.id,
     evidenceAdded,
     evidenceChanged,
     evidenceRemoved,
     decisionsAdded,
+    decisionChanges,
     tasksAdded,
     taskStatusChanges,
+    conflictsAdded,
     gitHeadChanged: (parent.git?.head ?? null) !== (current.git?.head ?? null),
   };
 }
@@ -229,7 +259,7 @@ export async function captureProject(
         ]
       : undefined;
 
-  const context = mergeContext(
+  const mergeResult = mergeContext(
     parent?.context ?? null,
     {
       ...(cliGoal !== undefined
@@ -255,6 +285,30 @@ export async function captureProject(
     },
     createdAt,
   );
+  const context = mergeResult.context;
+  const conflictsById = new Map(
+    (parent?.conflicts ?? []).map((conflict) => [conflict.id, conflict]),
+  );
+  for (const conflict of mergeResult.conflicts) {
+    conflictsById.set(conflict.id, conflict);
+  }
+  const resolvedConflictIds = [
+    ...new Set([
+      ...(inputFile?.resolvedConflicts ?? []),
+      ...(options.resolvedConflicts ?? []),
+    ]),
+  ];
+  for (const conflictId of resolvedConflictIds) {
+    if (!conflictsById.has(conflictId)) {
+      throw new Error(
+        `Cannot resolve unknown or already resolved conflict id: ${conflictId}`,
+      );
+    }
+  }
+  const resolvedConflictSet = new Set(resolvedConflictIds);
+  const conflicts = [...conflictsById.values()].filter(
+    (conflict) => !resolvedConflictSet.has(conflict.id),
+  );
 
   const warnings = dedupeText([
     ...gitResult.warnings,
@@ -268,6 +322,11 @@ export async function captureProject(
     ...(evidenceResult.evidence.files.length === 0
       ? ["No file evidence was recorded. Run capture in a project with readable files or pass --file."]
       : []),
+    ...(conflicts.length > 0
+      ? [
+          `Detected ${conflicts.length} unresolved context conflict(s). Review them with resume before continuing.`,
+        ]
+      : []),
   ]);
 
   const id = createSnapshotId(now);
@@ -275,6 +334,7 @@ export async function captureProject(
     context,
     evidence: evidenceResult.evidence,
     git: gitResult.snapshot,
+    conflicts,
   });
 
   const snapshot = SnapshotSchema.parse({
@@ -295,6 +355,7 @@ export async function captureProject(
       functional: "not-verified",
       note: FUNCTIONAL_VERIFICATION_NOTE,
     },
+    conflicts,
     delta,
     warnings,
   });
@@ -310,6 +371,7 @@ export async function captureProject(
     handoffPath: saved.handoffPath,
     relativeJsonPath: saved.relativeJsonPath,
     relativeMarkdownPath: saved.relativeMarkdownPath,
+    resolvedConflicts: resolvedConflictIds,
     warnings,
   };
 }

@@ -1,4 +1,4 @@
-import type { SnapshotContext } from "./schema.js";
+import type { Conflict, SnapshotContext } from "./schema.js";
 
 export type EvidenceCheckStatus =
   | "verified"
@@ -64,6 +64,7 @@ export interface ResumeResult {
   currentRoot: string;
   rootMatches: boolean;
   context: SnapshotContext;
+  conflicts: Conflict[];
   evidence: {
     summary: EvidenceSummary;
     checks: EvidenceCheck[];

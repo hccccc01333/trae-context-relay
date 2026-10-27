@@ -10,14 +10,33 @@ export const TaskStatusSchema = z.enum([
 
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 
+export const DecisionStatusSchema = z.enum(["active", "superseded"]);
+
+export type DecisionStatus = z.infer<typeof DecisionStatusSchema>;
+
 export const DecisionSchema = z.object({
   id: z.string().min(1),
   summary: z.string().min(1),
   rationale: z.string().min(1).optional(),
   createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime().nullable(),
+  status: DecisionStatusSchema,
+  revision: z.number().int().positive(),
+  supersedes: z.string().min(1).nullable(),
+  supersededBy: z.string().min(1).nullable(),
 });
 
 export type Decision = z.infer<typeof DecisionSchema>;
+
+export const TaskStatusHistoryEntrySchema = z.object({
+  from: TaskStatusSchema.nullable(),
+  to: TaskStatusSchema,
+  at: z.iso.datetime(),
+});
+
+export type TaskStatusHistoryEntry = z.infer<
+  typeof TaskStatusHistoryEntrySchema
+>;
 
 export const TaskSchema = z.object({
   id: z.string().min(1),
@@ -26,6 +45,7 @@ export const TaskSchema = z.object({
   notes: z.string().min(1).optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+  statusHistory: z.array(TaskStatusHistoryEntrySchema),
 });
 
 export type Task = z.infer<typeof TaskSchema>;
@@ -145,6 +165,28 @@ export const VerificationSchema = z.object({
 
 export type Verification = z.infer<typeof VerificationSchema>;
 
+export const ConflictKindSchema = z.enum([
+  "task_reopened",
+  "task_completed_from_blocked",
+  "decision_conflict",
+]);
+
+export type ConflictKind = z.infer<typeof ConflictKindSchema>;
+
+export const ConflictSchema = z.object({
+  id: z.string().min(1),
+  kind: ConflictKindSchema,
+  severity: z.enum(["info", "warning"]),
+  subjectId: z.string().min(1),
+  subjectLabel: z.string().min(1),
+  previous: z.string().min(1),
+  incoming: z.string().min(1),
+  detectedAt: z.iso.datetime(),
+  note: z.string().min(1).optional(),
+});
+
+export type Conflict = z.infer<typeof ConflictSchema>;
+
 export const TaskStatusChangeSchema = z.object({
   taskId: z.string().min(1),
   title: z.string().min(1),
@@ -154,14 +196,27 @@ export const TaskStatusChangeSchema = z.object({
 
 export type TaskStatusChange = z.infer<typeof TaskStatusChangeSchema>;
 
+export const DecisionStatusChangeSchema = z.object({
+  decisionId: z.string().min(1),
+  summary: z.string().min(1),
+  from: DecisionStatusSchema,
+  to: DecisionStatusSchema,
+});
+
+export type DecisionStatusChange = z.infer<
+  typeof DecisionStatusChangeSchema
+>;
+
 export const SnapshotDeltaSchema = z.object({
   parentId: z.string().min(1).nullable(),
   evidenceAdded: z.array(z.string()),
   evidenceChanged: z.array(z.string()),
   evidenceRemoved: z.array(z.string()),
   decisionsAdded: z.array(z.string()),
+  decisionChanges: z.array(DecisionStatusChangeSchema),
   tasksAdded: z.array(z.string()),
   taskStatusChanges: z.array(TaskStatusChangeSchema),
+  conflictsAdded: z.array(z.string()),
   gitHeadChanged: z.boolean(),
 });
 
@@ -181,6 +236,7 @@ export const SnapshotSchema = z.object({
   context: ContextSchema,
   evidence: EvidenceCollectionSchema,
   verification: VerificationSchema,
+  conflicts: z.array(ConflictSchema),
   delta: SnapshotDeltaSchema.nullable(),
   warnings: z.array(z.string()),
 });
@@ -191,8 +247,10 @@ const DecisionInputSchema = z.union([
   z.string().min(1),
   z
     .object({
+      id: z.string().min(1).optional(),
       summary: z.string().min(1),
       rationale: z.string().min(1).optional(),
+      supersedes: z.string().min(1).optional(),
     })
     .strict(),
 ]);
@@ -219,6 +277,7 @@ export const CaptureInputFileSchema = z
     nextSteps: z.array(z.string().min(1)).optional(),
     notes: z.array(z.string().min(1)).optional(),
     files: z.array(z.string().min(1)).optional(),
+    resolvedConflicts: z.array(z.string().min(1)).optional(),
   })
   .strict();
 

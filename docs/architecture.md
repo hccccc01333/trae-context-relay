@@ -1,4 +1,4 @@
-# ContextRelay v0.2 架构
+# ContextRelay v0.3 架构
 
 ## 1. 设计目标
 
@@ -50,21 +50,26 @@ ContextRelay 解决的是“跨会话恢复依据不可验证”的问题，而�
 6. scanProjectTree(projectRoot)
 7. buildEvidenceCandidates
 8. collectEvidence(sha256 + stat)
-9. mergeContext(parent.context, updates)
-10. buildDelta(parent, current)
-11. SnapshotSchema.parse
-12. renderSnapshotMarkdown
-13. 原子写入 JSON，写 Markdown 与 HANDOFF.md
+9. mergeContext(parent.context, updates) -> context + new conflicts
+10. 继承父快照 conflicts，应用显式 resolvedConflicts
+11. buildDelta(parent, current, conflicts)
+12. SnapshotSchema.parse
+13. renderSnapshotMarkdown
+14. 原子写入 JSON，写 Markdown 与 HANDOFF.md
 ```
 
 关键点：
 
 - 新快照是**不可变文件**，不是覆盖上一版本。
 - 上下文合并是增量的：
-  - 决策按摘要去重后追加，历史决策保留；
-  - 任务按 `id` 或规范化标题匹配，状态更新记录在 delta；
+  - 决策按 `id` 与摘要索引管理，只有显式 `supersedes` 才能替代旧决策；
+  - 任务按 `id` 或规范化标题匹配，状态变化写入 `statusHistory` 和 delta；
   - 下一步仅在显式提供时替换；
   - 备注去重并保留最近 50 条。
+- 冲突不是普通文本警告：
+  - 新冲突来自本次合并检测；
+  - 旧冲突默认继承，直到用户确认后用 `resolvedConflicts` / `--resolve-conflict` 显式关闭；
+  - 未知或已解决的冲突 ID 会直接报错，避免误操作。
 - 每个快照包含完整当前状态和相对父快照的 delta，因此恢复不需要重放所有历史文件。
 
 ## 4. Evidence 模型
@@ -109,7 +114,54 @@ resume 时额外计算：
 }
 ```
 
-v0.2 不允许调用方把功能状态写成已验证。即使任务输入 `done`，也会规范化为 `done_claimed`。
+v0.3 不允许调用方把功能状态写成已验证。即使任务输入 `done`，也会规范化为 `done_claimed`。
+
+### 4.4 增量记忆、决策修订与冲突
+
+决策不只保存摘要，还保存生命周期：
+
+```text
+id, summary, rationale?, createdAt, updatedAt,
+status: active | superseded,
+revision, supersedes, supersededBy
+```
+
+- 相同摘要、相同理由：视为重复输入，不新增决策。
+- 相同摘要、不同理由、未指定 `supersedes`：生成 `decision_conflict`，旧决策保持 `active`。
+- 显式 `supersedes`：旧决策标记为 `superseded`，新决策 `revision = old.revision + 1`，双方写入引用。
+- 未知或已废弃的目标 ID：捕获失败，不做猜测。
+
+任务状态是历史链：
+
+```text
+statusHistory: [{ from, to, at }]
+```
+
+冲突记录：
+
+```text
+id, kind, severity, subjectId, subjectLabel,
+previous, incoming, detectedAt, note?
+```
+
+| kind | 触发条件 | 含义 |
+| --- | --- | --- |
+| `task_reopened` | `done_claimed` → 其他状态 | 上一会话的完成声明被撤回 |
+| `task_completed_from_blocked` | `blocked` → `done_claimed` | 缺少解除阻塞的证据 |
+| `decision_conflict` | 同摘要、不同理由、无 `supersedes` | 决策理由发生变化但未显式修订 |
+
+冲突在后续快照中默认继承，只能通过 `resolvedConflicts`（JSON）或 `--resolve-conflict`（CLI）显式关闭。ContextRelay 不自动判断哪一方正确，也不会删除旧快照中的冲突记录。
+
+### 4.5 Schema 迁移
+
+当前 `schemaVersion = 2`。读取 v1 快照时，`migrations.ts` 在内存中补齐：
+
+- 决策：`status=active`、`revision=1`、`supersedes/supersededBy/updatedAt=null`；
+- 任务：`statusHistory=[]`；
+- 快照：`conflicts=[]`；
+- delta：`decisionChanges=[]`、`conflictsAdded=[]`。
+
+迁移结果仍由 `SnapshotSchema` 严格校验。原始 JSON 不重写，`resume --snapshot <old-id>` 可继续使用。
 
 ## 5. Resume 流程
 
@@ -119,7 +171,7 @@ v0.2 不允许调用方把功能状态写成已验证。即使任务输入 `done
 3. 对每个文件证据重新 lstat + sha256
 4. 计算 verified / changed / missing / unverifiable
 5. 读取当前 Git 状态并比较
-6. 汇总 warnings 与功能验证边界
+6. 汇总冲突、warnings 与功能验证边界
 7. 渲染中文恢复提示词
 8. 返回 prompt + 结构化 JSON
 ```
@@ -127,7 +179,9 @@ v0.2 不允许调用方把功能状态写成已验证。即使任务输入 `done
 恢复提示词不是“事实列表”，而是给下一个 Agent 的行动约束：
 
 - 先检查变化/缺失证据；
+- 逐条向用户确认未解决冲突，不能自行裁决；
 - 不把 `done_claimed` 当作完成；
+- 只执行 `active` 决策，不执行 `superseded` 决策；
 - 不重复实现已有工作；
 - 未实际运行测试不得宣称通过。
 
@@ -159,11 +213,11 @@ v0.2 不允许调用方把功能状态写成已验证。即使任务输入 `done
 
 ## 7. 测试策略
 
-- **单元**：Git 解析、排除规则、文件哈希、上下文合并。
+- **单元**：Git 解析、排除规则、文件哈希、上下文合并、决策修订、冲突检测、schema 迁移。
 - **集成**：真实 Git 仓库中的重命名与状态读取。
-- **E2E**：独立 Node 进程依次执行 capture → 修改工作区 → resume → 增量 capture，验证跨会话行为。
-- **断言重点**：哈希变化、文件缺失、不可验证路径、Git HEAD 前进、决策保留、任务状态语义。
+- **E2E**：独立 Node 进程依次执行 capture → 修改工作区 → resume → 增量 capture，验证任务重开、决策替代、冲突继承与显式解决。
+- **断言重点**：哈希变化、文件缺失、不可验证路径、Git HEAD 前进、决策状态、任务状态历史、冲突生命周期。
 
 ## 8. 后续演进
 
-v0.3 可把任务与具体证据路径关联，增加冲突检测；v0.4 引入恢复准确率和重复任务 Benchmark；v1.0 再把 CLI 封装为更完整的 Skill/界面。任何阶段都不应取消“功能验证与文件证据分离”这一约束。
+v0.4 执行 [Benchmark 协议](experiments/benchmark-protocol.md)，对比 ContextRelay resume 与普通 Markdown 摘要在真实新会话中的重复任务数、决策保留率和 Token 成本。任何阶段都不应取消“功能验证与文件证据分离”这一约束。

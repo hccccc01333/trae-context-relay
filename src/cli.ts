@@ -32,6 +32,7 @@ program
   .option("--note <text>", "record a note (repeatable)", collect, [])
   .option("--file <path>", "add a project-relative evidence file (repeatable)", collect, [])
   .option("--input <file>", "read structured context from a JSON file")
+  .option("--resolve-conflict <id>", "mark a previously confirmed conflict as resolved (repeatable)", collect, [])
   .option("--json", "print machine-readable JSON", false)
   .action(
     async (options: {
@@ -42,6 +43,7 @@ program
       note: string[];
       file: string[];
       input?: string;
+      resolveConflict: string[];
       json: boolean;
     }) => {
       await runCaptureCommand({
@@ -53,6 +55,7 @@ program
         notes: options.note,
         files: options.file,
         inputFile: options.input,
+        resolvedConflicts: options.resolveConflict,
         json: options.json,
       });
     },

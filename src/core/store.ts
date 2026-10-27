@@ -12,8 +12,10 @@ import {
   DATA_DIR_NAME,
   HANDOFF_FILE_NAME,
   SNAPSHOTS_DIR_NAME,
+  SNAPSHOT_SCHEMA_VERSION,
   STORE_GITIGNORE,
 } from "./constants.js";
+import { migrateSnapshotToCurrent } from "./migrations.js";
 import { SnapshotSchema, type Snapshot } from "./schema.js";
 import { toPosixPath } from "../utils/path.js";
 
@@ -200,10 +202,12 @@ async function readSnapshotFile(
     );
   }
 
-  const result = SnapshotSchema.safeParse(parsedJson);
+  const result = SnapshotSchema.safeParse(
+    migrateSnapshotToCurrent(parsedJson),
+  );
   if (!result.success) {
     throw new Error(
-      `Snapshot ${fileName} does not match schema v1: ${result.error.message}`,
+      `Snapshot ${fileName} does not match schema v${SNAPSHOT_SCHEMA_VERSION}: ${result.error.message}`,
     );
   }
 

@@ -11,6 +11,7 @@ export interface CaptureCliInput {
   nextSteps?: string[];
   notes?: string[];
   files?: string[];
+  resolvedConflicts?: string[];
   json: boolean;
 }
 
@@ -26,6 +27,7 @@ export async function runCaptureCommand(
     nextSteps: input.nextSteps,
     notes: input.notes,
     files: input.files,
+    resolvedConflicts: input.resolvedConflicts,
   });
 
   if (input.json) {
@@ -51,12 +53,19 @@ export async function runCaptureCommand(
     `  Evidence:  ${snapshot.evidence.files.length} file(s) hashed, ${snapshot.evidence.skipped.length} skipped`,
     `  Decisions: ${snapshot.context.decisions.length}`,
     `  Tasks:     ${snapshot.context.tasks.length}`,
+    `  Conflicts: ${snapshot.conflicts.length}`,
     `  Functional status: NOT VERIFIED (hash evidence only)`,
   ];
 
+  if (result.resolvedConflicts.length > 0) {
+    lines.push(
+      `  Resolved:  ${result.resolvedConflicts.length} explicitly confirmed conflict(s)`,
+    );
+  }
+
   if (snapshot.delta !== null) {
     lines.push(
-      `  Delta:     +${snapshot.delta.evidenceAdded.length} files, ${snapshot.delta.evidenceChanged.length} hash changes, ${snapshot.delta.decisionsAdded.length} new decisions`,
+      `  Delta:     +${snapshot.delta.evidenceAdded.length} files, ${snapshot.delta.evidenceChanged.length} hash changes, ${snapshot.delta.decisionsAdded.length} new decisions, ${snapshot.delta.decisionChanges.length} decision status changes, ${snapshot.delta.conflictsAdded.length} new conflicts`,
     );
   }
 

@@ -1,6 +1,6 @@
 export const TOOL_NAME = "context-relay";
-export const TOOL_VERSION = "0.2.0";
-export const SNAPSHOT_SCHEMA_VERSION = 1;
+export const TOOL_VERSION = "0.3.0";
+export const SNAPSHOT_SCHEMA_VERSION = 2;
 
 export const DATA_DIR_NAME = ".context-relay";
 export const SNAPSHOTS_DIR_NAME = "snapshots";

@@ -24,7 +24,11 @@ export {
 } from "./core/schema.js";
 export type {
   CaptureInputFile,
+  Conflict,
+  ConflictKind,
   Decision,
+  DecisionStatus,
+  DecisionStatusChange,
   EvidenceCollection,
   FileEvidence,
   GitSnapshot,
@@ -35,6 +39,8 @@ export type {
   SnapshotDelta,
   Task,
   TaskStatus,
+  TaskStatusChange,
+  TaskStatusHistoryEntry,
 } from "./core/schema.js";
 export type {
   EvidenceCheck,

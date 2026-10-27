@@ -296,4 +296,185 @@ describe("cross-session recovery (E2E)", () => {
     expect(resume.prompt).toContain("HEAD 已前进");
     expect(resume.prompt).toContain("src/math.ts");
   });
+
+  it("tracks task reopening, decision supersession, and conflicts across sessions", async () => {
+    const root = await createDemoRepository();
+
+    await writeProjectFile(
+      root,
+      ".session/v03-session-1.json",
+      `${JSON.stringify(
+        {
+          goal: "Exercise v0.3 conflict tracking",
+          decisions: [
+            {
+              summary: "Use SHA-256 file evidence",
+              rationale: "File hashes are auditable",
+            },
+          ],
+          tasks: [
+            {
+              title: "Implement parser",
+              status: "done",
+              notes: "Claimed complete without running tests",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const firstResult = runCli(root, [
+      "capture",
+      "--input",
+      ".session/v03-session-1.json",
+      "--json",
+    ]);
+    expectCliSuccess(firstResult);
+    const first = parseJsonOutput<CaptureResult>(firstResult.stdout);
+    expect(first.snapshot.conflicts).toEqual([]);
+    const decisionId = first.snapshot.context.decisions[0]?.id;
+    expect(decisionId).toBeDefined();
+    expect(first.snapshot.context.tasks[0]?.status).toBe("done_claimed");
+
+    await writeProjectFile(
+      root,
+      ".session/v03-session-2.json",
+      `${JSON.stringify(
+        {
+          decisions: [
+            {
+              summary: "Use SHA-256 plus Git evidence",
+              rationale: "Git adds version context",
+              supersedes: decisionId,
+            },
+          ],
+          tasks: [
+            {
+              title: "Implement parser",
+              status: "in_progress",
+              notes: "Reopened after review found missing tests",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const secondResult = runCli(root, [
+      "capture",
+      "--input",
+      ".session/v03-session-2.json",
+      "--json",
+    ]);
+    expectCliSuccess(secondResult);
+    const second = parseJsonOutput<CaptureResult>(secondResult.stdout);
+
+    expect(second.snapshot.conflicts).toHaveLength(1);
+    expect(second.snapshot.conflicts[0]).toMatchObject({
+      kind: "task_reopened",
+      previous: "done_claimed",
+      incoming: "in_progress",
+    });
+
+    const task = second.snapshot.context.tasks[0];
+    expect(task?.status).toBe("in_progress");
+    expect(task?.statusHistory).toHaveLength(2);
+    expect(task?.statusHistory[0]).toMatchObject({
+      from: null,
+      to: "done_claimed",
+    });
+    expect(task?.statusHistory[1]).toMatchObject({
+      from: "done_claimed",
+      to: "in_progress",
+    });
+
+    const oldDecision = second.snapshot.context.decisions.find(
+      (decision) => decision.id === decisionId,
+    );
+    const newDecision = second.snapshot.context.decisions.find(
+      (decision) => decision.id !== decisionId,
+    );
+    expect(oldDecision?.status).toBe("superseded");
+    expect(oldDecision?.supersededBy).toBe(newDecision?.id);
+    expect(newDecision).toMatchObject({
+      status: "active",
+      revision: 2,
+      supersedes: decisionId,
+    });
+
+    expect(second.snapshot.delta?.decisionChanges).toEqual([
+      {
+        decisionId,
+        summary: "Use SHA-256 file evidence",
+        from: "active",
+        to: "superseded",
+      },
+    ]);
+    expect(second.snapshot.delta?.conflictsAdded).toEqual([
+      second.snapshot.conflicts[0]?.id,
+    ]);
+    expect(
+      second.warnings.some((warning) =>
+        warning.includes("unresolved context conflict"),
+      ),
+    ).toBe(true);
+
+    const markdown = await readProjectFile(
+      root,
+      second.relativeMarkdownPath,
+    );
+    expect(markdown).toContain("未解决冲突（1）");
+    expect(markdown).toContain("任务被重新打开");
+    expect(markdown).toContain("已被替代的决策");
+    expect(markdown).toContain("决策状态变化");
+
+    const resumeResult = runCli(root, ["resume", "--json"]);
+    expectCliSuccess(resumeResult);
+    const resume = parseJsonOutput<ResumeResult>(resumeResult.stdout);
+
+    expect(resume.conflicts).toHaveLength(1);
+    expect(resume.prompt).toContain("未解决冲突（必须先与用户确认）");
+    expect(resume.prompt).toContain("任务被重新打开");
+    expect(resume.prompt).toContain("已被替代的决策");
+    expect(resume.prompt).toContain("Use SHA-256 plus Git evidence");
+    expect(resume.prompt).toContain("rev 2");
+    expect(resume.prompt).toContain("状态历史：done_claimed → in_progress");
+
+    const conflictId = second.snapshot.conflicts[0]?.id;
+    expect(conflictId).toBeDefined();
+
+    const resolvedResult = runCli(root, [
+      "capture",
+      "--resolve-conflict",
+      conflictId ?? "",
+      "--json",
+    ]);
+    expectCliSuccess(resolvedResult);
+    const resolved = parseJsonOutput<CaptureResult>(
+      resolvedResult.stdout,
+    );
+
+    expect(resolved.resolvedConflicts).toEqual([conflictId]);
+    expect(resolved.snapshot.conflicts).toEqual([]);
+    expect(resolved.snapshot.delta?.conflictsAdded).toEqual([]);
+
+    const afterResolution = parseJsonOutput<ResumeResult>(
+      runCli(root, ["resume", "--json"]).stdout,
+    );
+    expect(afterResolution.conflicts).toEqual([]);
+
+    const unknownResolution = runCli(root, [
+      "capture",
+      "--resolve-conflict",
+      "conf_missing",
+      "--json",
+    ]);
+    expect(unknownResolution.status).not.toBe(0);
+    expect(unknownResolution.stderr).toContain(
+      "Cannot resolve unknown or already resolved conflict id",
+    );
+  });
 });

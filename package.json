@@ -1,6 +1,6 @@
 {
   "name": "context-relay",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Verifiable context handoff and recovery for AI coding agents",
   "type": "module",
   "bin": {

@@ -4,7 +4,7 @@
 
 ContextRelay 是一个本地优先的上下文交接与恢复引擎。它为 TRAE 等 AI Coding 工具提供可执行 CLI：用 Git 和文件 SHA-256 证据保存项目状态，并在新会话中区分“已验证 / 已变化 / 缺失 / 无法验证”，再生成一份恢复提示词。
 
-> 当前版本：**v0.2.0**。先跑通 CLI 与 Git 证据闭环；暂不包含 Web UI、向量数据库和云同步。
+> 当前版本：**v0.3.0**。在 v0.2 的 CLI + Git 证据闭环上，新增增量记忆冲突检测、任务状态冲突和决策变更追踪；暂不包含 Web UI、向量数据库和云同步。
 
 ## 它解决什么问题
 
@@ -18,7 +18,7 @@ ContextRelay 是一个本地优先的上下文交接与恢复引擎。它为 TRA
 
 ContextRelay 的原则是：**上下文可以来自 Agent，但结论必须有证据边界。**
 
-## v0.2 能力
+## v0.3 能力
 
 | 能力 | 实现 |
 | --- | --- |
@@ -26,6 +26,10 @@ ContextRelay 的原则是：**上下文可以来自 Agent，但结论必须有�
 | 可验证证据 | 文件 SHA-256、Git HEAD/分支/祖先关系/工作区状态 |
 | 上下文恢复 | `context-relay resume` 生成差异化校验结果和中文恢复提示词 |
 | 增量记忆 | 快照不可变、继承目标与决策、更新任务状态、记录父子差异 |
+| 冲突检测 | 任务被重新打开、阻塞任务被声明完成、同摘要不同理由的决策冲突；冲突写入快照并在恢复提示词中强制确认 |
+| 任务状态历史 | 每个任务保存 `statusHistory`，恢复时能看到 `todo → done_claimed → in_progress` 等真实变化 |
+| 决策变更追踪 | 决策带 `revision` / `status` / `supersedes` / `supersededBy`；只有显式 `supersedes` 才能替代旧决策 |
+| 旧快照兼容 | schema v1 快照在读取时自动迁移到 v2，不重写原始文件 |
 | 隐私默认值 | 数据仅存本地；排除密钥、隐藏目录、依赖、构建产物和大文件（`.trae/skills/**` 公开能力文件例外） |
 | TRAE 集成 | 项目级 Skill：`.trae/skills/context-relay/SKILL.md`，内含 `/handoff`、`/resume` 工作流 |
 
@@ -72,6 +76,7 @@ context-relay capture \
 | `--note <text>` | 追加备注，可重复 |
 | `--file <path>` | 额外加入项目相对路径的文件证据，可重复 |
 | `--input <file>` | 从 JSON 读取结构化会话信息 |
+| `--resolve-conflict <id>` | 在用户明确确认后关闭一个已记录冲突，可重复；未知或已解决的 ID 会报错 |
 | `--json` | 输出机器可读结果 |
 
 ### 2. 使用结构化输入（推荐给 Agent）
@@ -113,7 +118,47 @@ context-relay capture --input handoff.json --json
 - `blocked`：阻塞
 - `done_claimed`（或输入 `done`）：上一会话**声明完成**，但 ContextRelay 不会自动验证功能
 
-### 3. 在新会话恢复
+### 3. 冲突与决策修订
+
+v0.3 不静默覆盖旧记忆。捕获时会检测并记录以下冲突：
+
+| 场景 | 行为 |
+| --- | --- |
+| `done_claimed` → `todo` / `in_progress` / `blocked` | 记录 `task_reopened`，保留完整 `statusHistory` |
+| `blocked` → `done_claimed` | 记录 `task_completed_from_blocked`，提示缺少解除阻塞的证据 |
+| 同一决策摘要、不同理由、未指定 `supersedes` | 记录 `decision_conflict`；旧决策保持 `active`，不新增重复决策 |
+| 显式指定 `supersedes` | 旧决策变为 `superseded`；新决策 `revision + 1`，并写入 `supersededBy` 与 delta |
+| 指定不存在或已废弃的决策 ID | 捕获失败，要求修正输入 |
+
+修订决策示例：
+
+```json
+{
+  "decisions": [
+    {
+      "summary": "快照同时输出 JSON 与 Markdown",
+      "rationale": "新 Agent 需要可直接阅读的交接文件",
+      "supersedes": "dec_ab12cd34ef56"
+    }
+  ]
+}
+```
+
+冲突会继承到后续快照，并在 `resume` 中显示为“未解决冲突（必须先与用户确认）”。工具不会自动裁决冲突。只有用户确认后，才能在下次交接时显式关闭：
+
+```json
+{
+  "resolvedConflicts": ["conf_ab12cd34ef56"]
+}
+```
+
+```bash
+context-relay capture --resolve-conflict conf_ab12cd34ef56
+```
+
+旧快照中的冲突记录和已废弃决策永远不会被改写。
+
+### 4. 在新会话恢复
 
 ```bash
 context-relay resume
@@ -121,10 +166,11 @@ context-relay resume
 
 默认输出一份可直接交给新 Agent 的中文恢复提示词，包含：
 
-- 快照 ID、目标、关键决策；
+- 快照 ID、目标、当前有效决策和已废弃决策；
 - 文件证据逐项校验结果；
 - Git HEAD 关系与提交后变化；
-- “声明完成但未验证”的任务；
+- “声明完成但未验证”的任务及其状态历史；
+- 未解决冲突（必须逐条向用户确认）；
 - 恢复后的第一轮行动约束。
 
 程序化读取：
@@ -164,6 +210,10 @@ ContextRelay 只把两类东西当作证据：
 
 **文件哈希一致只证明文件内容未变，不证明测试通过或功能可用。**  
 Git 提交只证明版本关系，不证明业务逻辑正确。
+
+## 快照 schema 与迁移
+
+当前快照 `schemaVersion` 为 **2**。v0.2 生成的 v1 快照在读取时会自动补全决策版本、任务状态历史、冲突列表和 delta 新字段，再通过当前 Zod schema 校验；原始 `.json` 文件不会被重写。`resume --snapshot <old-id>` 因此仍可读取历史快照。
 
 ## 本地数据与排除规则
 
@@ -223,8 +273,9 @@ src/
 │   ├── git.ts             # Git 证据读取/解析
 │   ├── evidence.ts        # 证据候选与哈希采集
 │   ├── exclusions.ts      # 密钥/依赖/大文件排除策略
-│   ├── context.ts         # 决策、任务、下一步增量合并
-│   ├── store.ts           # 不可变快照存储
+│   ├── context.ts         # 决策、任务、下一步增量合并与冲突检测
+│   ├── migrations.ts      # v1 快照迁移到当前 schema
+│   ├── store.ts           # 不可变快照存储与读取迁移
 │   ├── render.ts          # Markdown 交接与恢复提示词
 │   ├── schema.ts          # Zod 数据模型
 │   └── tree.ts            # 受限目录扫描
@@ -276,15 +327,18 @@ npm run check       # typecheck + test + build
 - 文件哈希与超大文件跳过；
 - 路径穿越拒绝与敏感目录排除；
 - 决策去重、任务状态更新、下一步继承/清空；
+- 任务重新打开、阻塞转完成、决策 `supersedes` 与理由冲突；
+- v1 → v2 快照迁移，旧快照读取不重写源文件；
 - 首次捕获、跨进程恢复、哈希变化/缺失/不可验证；
 - 增量快照、父子差异、Git HEAD 前进与提交文件变化；
+- 冲突显式解决与未知冲突 ID 报错；
 - `.context-relay` 不污染 `git status`。
 
 ## 路线图
 
-- **v0.2**：CLI + Git 证据 + 跨会话恢复（当前）
-- **v0.3**：增量记忆冲突检测、更细的任务证据关联
-- **v0.4**：Benchmark 与普通 Markdown 摘要对照实验
+- **v0.2**：CLI + Git 证据 + 跨会话恢复
+- **v0.3**：冲突检测、任务状态历史、决策变更追踪、schema v2 迁移（当前）
+- **v0.4**：执行 [Benchmark 协议](docs/experiments/benchmark-protocol.md)，对比 ContextRelay 与 Markdown 摘要的重复任务数和 Token 消耗
 - **v1.0**：完整 TRAE Skill 工作流与可视化界面
 
 ## 已知限制

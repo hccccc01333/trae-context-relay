@@ -349,6 +349,11 @@ export async function resumeProject(
     ...(evidenceSummary.missing > 0
       ? ["存在已缺失的证据文件，不要假设对应工作仍然存在。"]
       : []),
+    ...(snapshot.conflicts.length > 0
+      ? [
+          `快照记录了 ${snapshot.conflicts.length} 个未解决冲突，必须先与用户确认再继续。`,
+        ]
+      : []),
   ]);
 
   const result: ResumeResult = {
@@ -361,6 +366,7 @@ export async function resumeProject(
     currentRoot,
     rootMatches,
     context: snapshot.context,
+    conflicts: snapshot.conflicts,
     evidence: {
       summary: evidenceSummary,
       checks: evidenceChecks,
