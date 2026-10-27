@@ -572,14 +572,31 @@ async function resolveSmokeSnapshots(armDir, runId, arm) {
     manifest?.arms?.[arm]?.expectedDefaultFormat ?? null;
   const snapshotDir = path.join(armDir, ".context-relay", "snapshots");
   const names = (await exists(snapshotDir))
-    ? (await readdir(snapshotDir)).filter((name) => name.endsWith(".json"))
+    ? (await readdir(snapshotDir))
+        .filter((name) => name.endsWith(".json"))
+        .map((name) => name.replace(/\.json$/, ""))
+        .sort()
     : [];
-  if (names.length >= 2 && manifest?.snapshots?.h1 && manifest?.snapshots?.h2) {
+  const h1 = manifest?.snapshots?.h1;
+  const h2 = manifest?.snapshots?.h2;
+  if (h1 && h2 && names.includes(h1) && names.includes(h2)) {
     return {
       cwd: armDir,
       source: "arm-snapshots",
-      from: manifest.snapshots.h1,
-      to: manifest.snapshots.h2,
+      from: h1,
+      to: h2,
+      cleanup: null,
+      expectedDefaultFormat,
+    };
+  }
+  // An arm may create its own test snapshots (B is allowed to do so). Use two
+  // of those instead of the fixture IDs, which only exist in A.
+  if (names.length >= 2) {
+    return {
+      cwd: armDir,
+      source: "arm-snapshots",
+      from: names[0],
+      to: names[names.length - 1],
       cleanup: null,
       expectedDefaultFormat,
     };
@@ -591,15 +608,15 @@ async function resolveSmokeSnapshots(armDir, runId, arm) {
   await rm(tempDir, { recursive: true, force: true });
   await mkdir(path.dirname(tempDir), { recursive: true });
   git(["clone", "--quiet", "--no-hardlinks", armDir, tempDir], REPO_ROOT);
-  const h1 = await captureFixture(armDir, "h1.json", { cwd: tempDir });
-  assertH1(h1);
-  const h2 = await captureFixture(armDir, "h2.json", { cwd: tempDir });
-  assertH2(h2);
+  const h1Snapshot = await captureFixture(armDir, "h1.json", { cwd: tempDir });
+  assertH1(h1Snapshot);
+  const h2Snapshot = await captureFixture(armDir, "h2.json", { cwd: tempDir });
+  assertH2(h2Snapshot);
   return {
     cwd: tempDir,
     source: "temp-clone",
-    from: h1.id,
-    to: h2.id,
+    from: h1Snapshot.id,
+    to: h2Snapshot.id,
     cleanup: tempDir,
     expectedDefaultFormat,
   };
