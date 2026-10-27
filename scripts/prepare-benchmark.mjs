@@ -113,9 +113,13 @@ async function buildCli() {
 
 async function cloneArm(destination, baseline) {
   git(["clone", "--quiet", "--no-hardlinks", REPO_ROOT, destination]);
-  git(["checkout", "--quiet", "--detach", baseline], destination);
+  // Keep a named branch instead of detached HEAD so the handoff's branch
+  // statement ("main") stays truthful in both arms.
+  git(["checkout", "--quiet", "-B", "main", baseline], destination);
   const head = git(["rev-parse", "HEAD"], destination);
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], destination);
   assert(head === baseline, `Clone ${destination} is at ${head}, expected ${baseline}`);
+  assert(branch === "main", `Clone ${destination} is on ${branch}, expected main`);
 }
 
 async function copyLocalDependencies(armDir) {
