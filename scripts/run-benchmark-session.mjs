@@ -37,8 +37,9 @@ const TASK_CARD = path.join(
   "docs",
   "experiments",
   "benchmark-tasks",
-  "diff-command.md",
+  "diff-command-v2.md",
 );
+const B_HANDOFF = path.join(FIXTURES, "arm-b-handoff-v2.md");
 
 const SCRUB_PATHS = [
   "docs/experiments/benchmark-tasks",
@@ -209,16 +210,20 @@ function buildArm(armDir) {
 }
 
 function nodeCli(armDir, args, options = {}) {
-  const result = run(process.execPath, ["dist/cli.js", ...args], {
-    cwd: armDir,
+  // Use an absolute CLI path so verification can run the built binary against
+  // a temporary repository without copying dist/ into it.
+  const result = run(process.execPath, [path.join(armDir, "dist", "cli.js"), ...args], {
+    cwd: options.cwd ?? armDir,
     allowFailure: options.allowFailure ?? false,
   });
   return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
 }
 
-async function captureFixture(armDir, fixtureName) {
+async function captureFixture(armDir, fixtureName, options = {}) {
   const fixturePath = path.join(FIXTURES, fixtureName);
-  const output = nodeCli(armDir, ["capture", "--input", fixturePath, "--json"]);
+  const output = nodeCli(armDir, ["capture", "--input", fixturePath, "--json"], {
+    cwd: options.cwd,
+  });
   const parsed = JSON.parse(output.stdout.replace(/^\uFEFF/, ""));
   assert(parsed.ok === true, `${fixtureName} capture returned ok=false`);
   return parsed.snapshot;
@@ -274,7 +279,12 @@ async function scanLeaks(root, label, allowSet) {
       continue;
     }
     for (const entry of entries) {
-      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") {
+      if (
+        entry.name === "node_modules" ||
+        entry.name === ".git" ||
+        entry.name === "dist" ||
+        entry.name === "benchmark"
+      ) {
         continue;
       }
       const full = path.join(current, entry.name);
@@ -352,6 +362,10 @@ async function prepare(argv) {
   const baselineTag = valueAfter(argv, "--baseline") ?? "benchmark-v0.3-base";
   const force = argv.includes("--force");
   const runDir = path.join(RUNS_ROOT, runId);
+  const taskCardPath = path.resolve(valueAfter(argv, "--task-card") ?? TASK_CARD);
+  const bHandoffPath = path.resolve(valueAfter(argv, "--handoff-b") ?? B_HANDOFF);
+  assert(await exists(taskCardPath), `Missing task card: ${taskCardPath}`);
+  assert(await exists(bHandoffPath), `Missing B handoff: ${bHandoffPath}`);
 
   if (await exists(runDir)) {
     if (!force) {
@@ -362,8 +376,8 @@ async function prepare(argv) {
 
   const baseline = git(["rev-parse", `${baselineTag}^{commit}`], REPO_ROOT);
   const sealed = await createSealedBaseline(baselineTag);
-  const taskCard = await readFile(TASK_CARD, "utf8");
-  const bHandoff = await readFile(path.join(FIXTURES, "arm-b-handoff.md"), "utf8");
+  const taskCard = await readFile(taskCardPath, "utf8");
+  const bHandoff = await readFile(bHandoffPath, "utf8");
 
   const armA = path.join(runDir, "A");
   const armB = path.join(runDir, "B");
@@ -425,6 +439,23 @@ async function prepare(argv) {
   await writeFile(path.join(armA, "benchmark", "START.md"), promptAText, "utf8");
   await writeFile(path.join(armB, "benchmark", "START.md"), promptBText, "utf8");
 
+  // Guard against silently falling back to the v1 task card, which hard-coded
+  // the default output format and therefore destroyed the H2 signal.
+  for (const [label, startPath] of [
+    ["A", path.join(armA, "benchmark", "START.md")],
+    ["B", path.join(armB, "benchmark", "START.md")],
+  ]) {
+    const start = await readFile(startPath, "utf8");
+    assert(
+      start.includes("默认输出格式与交接材料中的决策一致"),
+      `${label} START.md lacks the v2 acceptance criterion`,
+    );
+    assert(
+      !start.includes("不要重复实现交接材料中已经完成"),
+      `${label} START.md still carries the v1 duplicate-work guard`,
+    );
+  }
+
   await scanLeaks(armA, "A", LEAK_PHRASES_ALLOWED_IN_A);
   await scanLeaks(armB, "B", new Set());
 
@@ -439,9 +470,31 @@ async function prepare(argv) {
     protocol: "single-message handoff + task card",
     sealedBaseline: { tag: baselineTag, original: baseline, head: sealed.head },
     snapshots: { h1: h1.id, h2: h2.id },
+    materials: {
+      taskCard: {
+        path: path.relative(REPO_ROOT, taskCardPath).replaceAll("\\", "/"),
+        sha256: sha256(taskCard),
+      },
+      bHandoff: {
+        path: path.relative(REPO_ROOT, bHandoffPath).replaceAll("\\", "/"),
+        sha256: sha256(bHandoff),
+      },
+    },
     arms: {
-      A: { path: `A`, head: sealed.head, handoffChars: resume.stdout.length },
-      B: { path: `B`, head: sealed.head, handoffChars: bHandoff.length },
+      // A sees H2, where the default flips to the human summary. B only has
+      // the stale H1 summary, which says the default is JSON.
+      A: {
+        path: `A`,
+        head: sealed.head,
+        handoffChars: resume.stdout.length,
+        expectedDefaultFormat: "human",
+      },
+      B: {
+        path: `B`,
+        head: sealed.head,
+        handoffChars: bHandoff.length,
+        expectedDefaultFormat: "json",
+      },
     },
     prompts: { A: promptA, B: promptB, promptSha256: { A: sha256(await readFile(promptA, "utf8")), B: sha256(await readFile(promptB, "utf8")) } },
     taskCardChars: taskCard.length,
@@ -472,6 +525,162 @@ async function prepare(argv) {
   );
   console.log(`prompt A: ${promptA}`);
   console.log(`prompt B: ${promptB}`);
+}
+
+const HUMAN_MARKERS = ["Git", "决策", "任务", "冲突"];
+
+function analyzeDiffOutput(result, fromId, toId) {
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+  let parsed = null;
+  try {
+    parsed = JSON.parse(stdout.replace(/^\uFEFF/, "").trim());
+  } catch {
+    parsed = null;
+  }
+  const matched = HUMAN_MARKERS.filter((marker) =>
+    marker === "Git" ? /git/i.test(stdout) : stdout.includes(marker),
+  );
+  const humanComplete = matched.length === HUMAN_MARKERS.length;
+  return {
+    exitCode: result.status,
+    stdoutChars: stdout.length,
+    stderrChars: stderr.length,
+    stderrSample: stderr.trim().slice(0, 200),
+    parsesJson: parsed !== null,
+    jsonKeys:
+      parsed !== null && typeof parsed === "object" ? Object.keys(parsed) : null,
+    humanMarkers: matched,
+    humanComplete,
+    referencesBothSnapshots:
+      stdout.includes(fromId) && stdout.includes(toId),
+    detectedFormat: parsed !== null ? "json" : humanComplete ? "human" : "unknown",
+  };
+}
+
+async function readManifest(runId) {
+  const manifestPath = path.join(RUNS_ROOT, runId, "manifest.json");
+  if (!(await exists(manifestPath))) {
+    return null;
+  }
+  return JSON.parse(await readFile(manifestPath, "utf8"));
+}
+
+async function resolveSmokeSnapshots(armDir, runId, arm) {
+  const manifest = await readManifest(runId);
+  const expectedDefaultFormat =
+    manifest?.arms?.[arm]?.expectedDefaultFormat ?? null;
+  const snapshotDir = path.join(armDir, ".context-relay", "snapshots");
+  const names = (await exists(snapshotDir))
+    ? (await readdir(snapshotDir)).filter((name) => name.endsWith(".json"))
+    : [];
+  if (names.length >= 2 && manifest?.snapshots?.h1 && manifest?.snapshots?.h2) {
+    return {
+      cwd: armDir,
+      source: "arm-snapshots",
+      from: manifest.snapshots.h1,
+      to: manifest.snapshots.h2,
+      cleanup: null,
+      expectedDefaultFormat,
+    };
+  }
+
+  // B starts without snapshot history. Clone the arm (tracked files only) so
+  // the fixture evidence paths exist, then capture H1/H2 with that arm's CLI.
+  const tempDir = path.join(os.tmpdir(), "contextrelay-verify", runId, arm);
+  await rm(tempDir, { recursive: true, force: true });
+  await mkdir(path.dirname(tempDir), { recursive: true });
+  git(["clone", "--quiet", "--no-hardlinks", armDir, tempDir], REPO_ROOT);
+  const h1 = await captureFixture(armDir, "h1.json", { cwd: tempDir });
+  assertH1(h1);
+  const h2 = await captureFixture(armDir, "h2.json", { cwd: tempDir });
+  assertH2(h2);
+  return {
+    cwd: tempDir,
+    source: "temp-clone",
+    from: h1.id,
+    to: h2.id,
+    cleanup: tempDir,
+    expectedDefaultFormat,
+  };
+}
+
+async function runDiffSmoke(armDir, runId, arm) {
+  if (!(await exists(path.join(armDir, "dist", "cli.js")))) {
+    return { skipped: "dist/cli.js is missing after npm run check" };
+  }
+
+  const target = await resolveSmokeSnapshots(armDir, runId, arm);
+  const call = (args) =>
+    nodeCli(armDir, args, { cwd: target.cwd, allowFailure: true });
+  const base = ["diff", "--from", target.from, "--to", target.to];
+
+  try {
+    const defaultRun = call(base);
+    const jsonRun = call([...base, "--json"]);
+    const humanRun = call([...base, "--human"]);
+    const errorCases = [
+      { name: "missing_to", args: ["diff", "--from", target.from] },
+      {
+        name: "same_snapshot",
+        args: ["diff", "--from", target.from, "--to", target.from],
+      },
+      {
+        name: "unknown_snapshot",
+        args: [
+          "diff",
+          "--from",
+          target.from,
+          "--to",
+          "snap_19990101T000000000Z_deadbeef",
+        ],
+      },
+      {
+        name: "illegal_id",
+        args: ["diff", "--from", "bad id!", "--to", target.to],
+      },
+    ].map(({ name, args }) => {
+      const result = call(args);
+      return {
+        name,
+        exitCode: result.status,
+        stderrChars: (result.stderr ?? "").length,
+        failedAsRequired:
+          result.status !== 0 && (result.stderr ?? "").trim().length > 0,
+      };
+    });
+
+    const defaultAnalysis = analyzeDiffOutput(defaultRun, target.from, target.to);
+    const jsonAnalysis = analyzeDiffOutput(jsonRun, target.from, target.to);
+    const humanFlagAnalysis = analyzeDiffOutput(humanRun, target.from, target.to);
+    // A v2 implementation may expose the human summary either as the default
+    // (A) or behind `--human` (B). Record which one actually worked.
+    const humanSummary = defaultAnalysis.humanComplete
+      ? { source: "default", ...defaultAnalysis }
+      : humanFlagAnalysis.humanComplete
+        ? { source: "--human", ...humanFlagAnalysis }
+        : { source: "none", ...humanFlagAnalysis };
+    return {
+      source: target.source,
+      from: target.from,
+      to: target.to,
+      expectedDefaultFormat: target.expectedDefaultFormat,
+      default: defaultAnalysis,
+      json: jsonAnalysis,
+      humanFlag: humanFlagAnalysis,
+      humanSummary,
+      defaultMatchesHandoff:
+        target.expectedDefaultFormat === null
+          ? null
+          : defaultAnalysis.detectedFormat === target.expectedDefaultFormat,
+      errors: errorCases,
+      allErrorCasesFailed: errorCases.every((entry) => entry.failedAsRequired),
+    };
+  } finally {
+    if (target.cleanup !== null) {
+      await rm(target.cleanup, { recursive: true, force: true });
+    }
+  }
 }
 
 async function verify(argv) {
@@ -535,37 +744,8 @@ async function verify(argv) {
     dependencyDiffEmpty: dependencyDiff === "",
     snapshots,
     diffCommandRegistered: hasDiff,
+    diffSmoke: hasDiff ? await runDiffSmoke(armDir, runId, arm) : null,
   };
-
-  if (hasDiff && arm === "A" && snapshots.length >= 2) {
-    const manifest = JSON.parse(
-      await readFile(path.join(RUNS_ROOT, runId, "manifest.json"), "utf8"),
-    );
-    const from = manifest.snapshots.h1;
-    const to = manifest.snapshots.h2;
-    const human = run(process.execPath, ["dist/cli.js", "diff", "--from", from, "--to", to], {
-      cwd: armDir,
-      allowFailure: true,
-    });
-    const json = run(
-      process.execPath,
-      ["dist/cli.js", "diff", "--from", from, "--to", to, "--json"],
-      { cwd: armDir, allowFailure: true },
-    );
-    let parsed = null;
-    try {
-      parsed = JSON.parse((json.stdout ?? "").replace(/^\uFEFF/, ""));
-    } catch {
-      parsed = null;
-    }
-    verification.diffSmoke = {
-      humanExitCode: human.status,
-      humanChars: (human.stdout ?? "").length,
-      jsonExitCode: json.status,
-      jsonParses: parsed !== null,
-      jsonKeys: parsed === null ? null : Object.keys(parsed),
-    };
-  }
 
   await writeFile(
     path.join(benchDir, "verification.json"),
@@ -586,7 +766,10 @@ async function main() {
     await verify(argv);
     return;
   }
-  fail("Usage: node scripts/run-benchmark-session.mjs <prepare|verify> [--run run-02] [--arm A]");
+  fail(
+    "Usage: node scripts/run-benchmark-session.mjs <prepare|verify> " +
+      "[--run run-03] [--arm A] [--task-card <path>] [--handoff-b <path>] [--force]",
+  );
 }
 
 main().catch((error) => {

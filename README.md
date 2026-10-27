@@ -349,7 +349,7 @@ npm run check       # typecheck + test + build
 - [v0.2 自我 dogfooding](docs/experiments/v0.2-dogfooding.md)：真实仓库快照、跨进程恢复与 TRAE 新会话验证。
 - [v0.3 自我 dogfooding](docs/experiments/v0.3-dogfooding.md)：任务重新打开、决策 `supersedes`、冲突恢复提示词与 v1 快照迁移。
 - [Benchmark 协议](docs/experiments/benchmark-protocol.md)：ContextRelay vs Markdown 摘要的重复任务数与 Token 对照实验。
-- [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`。
+- [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`（v1 用于 run-01/02；[v2](docs/experiments/benchmark-tasks/diff-command-v2.md) 用于 run-03）。
 - [Benchmark 评分表](docs/experiments/benchmark-scorecard.md)：每次运行必须保留的原始指标。
 
 > 已完成 1 轮有效 A/B（run-02，两边均通过验收）与 run-01 的 1 次有效 A 会话；样本仍不足以发布量化结论，Token 用量不可得。

@@ -135,19 +135,18 @@ git tag benchmark-v0.3-base
 │   ├── A/
 │   ├── B/
 │   ├── manifest.json
-│   ├── scorecard.md
-│   └── task-card.md
+│   └── scorecard.md
 ├── run-02/
 └── run-03/
 ```
 
-`.benchmark-runs/` 是本地隐藏工作目录，已加入 `.gitignore`，也不会进入 ContextRelay 的项目目录树。可以用下面的命令自动完成克隆、构建、H1/H2 捕获、A/B 交接材料和评分表骨架：
+`.benchmark-runs/` 是本地隐藏工作目录，已加入 `.gitignore`，也不会进入 ContextRelay 的项目目录树。可以用下面的命令自动完成封存基线、H1/H2 捕获、A/B 交接材料和 `benchmark/START.md`：
 
 ```bash
-node scripts/prepare-benchmark.mjs
+node scripts/run-benchmark-session.mjs prepare --run run-03
 ```
 
-脚本拒绝在脏工作区运行，并要求再次使用 `--force` 才会删除并重建已有运行目录。它不会执行任何真实会话，也不会填写任何指标。
+任务卡与 B 组摘要通过 `--task-card` / `--handoff-b` 指定；默认分别使用 `docs/experiments/benchmark-tasks/diff-command-v2.md` 与 `docs/experiments/benchmark-fixtures/arm-b-handoff-v2.md`。脚本拒绝在已有运行目录上重复运行，除非使用 `--force`。它不会执行任何真实会话，也不会填写任何指标。会话结束后用同一脚本的 `verify` 子命令复跑测试并归档结果；B 组没有快照历史时，`verify` 会在临时克隆中捕获 H1/H2 来验证 `diff`。
 
 A 副本保留 H1/H2 快照，因为恢复提示词引用了它们；B 副本只包含源码，**不得包含 A 的 `.context-relay`**。B 组可以在会话中自行创建测试快照。禁止把 A 的快照目录复制给 B，否则 B 可以通过 `resume` 读取 A 的交接材料，控制组会被污染。
 
@@ -253,10 +252,10 @@ B 组使用同名结构（`arm-b-handoff.md`）。原始记录必须保留，不
 | 项目 | 状态 |
 | --- | --- |
 | 协议 | 已完成（本文档） |
-| 任务卡 | 已完成 |
+| 任务卡 | 已完成 v1；run-03 使用 [v2](benchmark-tasks/diff-command-v2.md) |
 | 评分表 | 已完成 |
 | H1/H2 场景输入 | 已固化为 [benchmark-fixtures](benchmark-fixtures/README.md) |
-| 运行目录准备 | `node scripts/run-benchmark-session.mjs prepare --run run-02`（封存基线、生成 arm 与 `benchmark/START.md`）；`verify` 子命令负责复跑测试与归档 |
+| 运行目录准备 | `node scripts/run-benchmark-session.mjs prepare --run run-03`（封存基线、生成 arm 与 `benchmark/START.md`）；`verify` 子命令负责复跑测试、为 B 临时捕获快照并归档 |
 | 正式运行 | **3 / 6 有效会话**：run-01 A 有效、B 无效；run-02 A/B 有效。有效轮次 **1 / 3** |
 | E2 消融 | 未开始 |
 | 结论 | 无。run-02 的任务卡直接规定争议决策并禁止重复实现，H1/H2 不可判定 |
@@ -266,6 +265,7 @@ B 组使用同名结构（`arm-b-handoff.md`）。原始记录必须保留，不
 - **run-01（A→B）**：A 有效（0 重复任务、3/3 决策保留、28 测试通过）；B 无效（任务卡晚于首次实现，且使用了 A 组专用确认句），不计分。
 - **run-02（计划 B→A，实际并行，A 于 21:48 先开始）**：A/B 均通过验收；0 重复任务、0 人工干预；A 1211s / 26 测试，B 1381s / 29 测试。
 - **run-02 的混杂**：任务卡第 1 节硬性要求“默认中文摘要”，替 B 解决了其摘要中的过期决策；任务卡背景又要求“不要重复实现”。因此 H1（重复任务）与 H2（决策保留）在 run-02 中都不再可判定，只能作为流程与验收数据。
+- **run-03 准备（最后一轮，尚未运行）**：改用任务卡 v2（删除重复实现禁令、默认格式由交接材料决定）与 `arm-b-handoff-v2.md`（B 的过期决策只错在默认格式）。`manifest.json` 记录 `expectedDefaultFormat`（A=`human`，B=`json`）；`verify` 会分别检测默认格式、`--json`、`--human` 与 4 类错误场景。
 - **Token**：两次运行的分享页均未提供输入/输出用量，全部标记 `unavailable`，未用字符数估算。
 
 
