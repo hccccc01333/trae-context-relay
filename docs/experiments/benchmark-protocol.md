@@ -141,7 +141,7 @@ runs/
     └── B/
 ```
 
-两个副本必须包含相同的 `.context-relay` 快照链。若 `.context-relay` 仍被 Git 忽略，手动复制该目录，并确保 H1/H2 都存在。
+A 副本保留 H1/H2 快照，因为恢复提示词引用了它们；B 副本只包含源码，**不得包含 A 的 `.context-relay`**。B 组可以在会话中自行创建测试快照。禁止把 A 的快照目录复制给 B，否则 B 可以通过 `resume` 读取 A 的交接材料，控制组会被污染。
 
 ### 4.2 生成交接材料
 
@@ -154,7 +154,7 @@ node dist/cli.js capture --input docs/experiments/benchmark-fixtures/h2.json
 node dist/cli.js resume > benchmark/arm-a-handoff.txt
 ```
 
-在 B 副本中放置从 H1 编写的 `docs/experiments/benchmark-fixtures/arm-b-handoff.md`，复制为 `benchmark/arm-b-handoff.md`。两份材料都不得包含任务卡以外的提示。完整步骤见 [benchmark-fixtures/README.md](benchmark-fixtures/README.md)。
+A 副本保留生成的 H1/H2 快照。在 B 副本中放置从 H1 编写的 `docs/experiments/benchmark-fixtures/arm-b-handoff.md`，复制为 `benchmark/arm-b-handoff.md`；B 副本不包含任何 ContextRelay 快照。两份材料都不得包含任务卡以外的提示。完整步骤见 [benchmark-fixtures/README.md](benchmark-fixtures/README.md)。
 
 ### 4.3 运行新会话
 

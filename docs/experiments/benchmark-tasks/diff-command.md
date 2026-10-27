@@ -113,7 +113,7 @@ context-relay diff --from <snapshot-id> --to <snapshot-id> --json
 满足以下全部条件才算完成：
 
 1. `npm run check` 真实通过（typecheck + 全部测试 + build）；
-2. 使用仓库中两个真实快照运行 `diff`，人类输出包含上述全部章节；
+2. 使用会话中创建或仓库中已有的两个快照运行 `diff`，人类输出包含上述全部章节；
 3. `--json` 输出可以被 `JSON.parse` 解析，且字段符合约定；
 4. 非法参数与不存在的快照返回非零退出码；
 5. 新增测试真实覆盖上述场景；

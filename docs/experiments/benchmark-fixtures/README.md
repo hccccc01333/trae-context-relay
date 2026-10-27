@@ -29,9 +29,9 @@ node dist/cli.js capture --input docs/experiments/benchmark-fixtures/h1.json --j
 node dist/cli.js capture --input docs/experiments/benchmark-fixtures/h2.json --json
 ```
 
-4. 复制种子目录为 A/B 两个独立副本，确保 `.context-relay/` 一起复制（它默认被 Git 忽略）。
+4. A 副本保留生成的 H1/H2 `.context-relay` 快照；不要把这个目录复制到 B 副本。B 组从空的快照历史开始，可在会话中自行创建测试快照，避免通过 `resume` 读到 A 组的交接材料。
 
-5. A 组生成交接材料：
+5. 在 A 副本生成交接材料：
 
 ```bash
 node dist/cli.js resume > handoff.txt
