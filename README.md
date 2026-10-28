@@ -68,7 +68,7 @@ ContextRelay 还在早期。比起 star，我更想收集真实场景：
 
 run-03 使用 DeepSeek V4.1 Flash；结论：**它买到的是“决策新鲜度”，不是“更便宜”。** A 的平台积分高 29.7%，时长多 18.8%；Token 用量不可得。两臂都没有重复任务，因此这次没有证明“减少重复开发”。
 
-run-04 只把 A 的交接材料换成 `resume --compact`，B 摘要与任务卡保持不变（该轮模型未确认）：
+run-04 只把 A 的交接材料换成 `resume --compact`，B 摘要与任务卡保持不变（两臂均使用 DeepSeek V4.1 Flash）：
 
 | 指标 | run-04 A：`resume --compact` | run-04 B：Markdown 摘要 |
 | --- | ---: | ---: |
@@ -82,7 +82,7 @@ run-04 只把 A 的交接材料换成 `resume --compact`，B 摘要与任务卡�
 
 **compact 缩短了交接材料，但没有降低平台成本**：A 的积分仍比 B 高 33.8%，时长多 27.4%。它本轮保住了 3/3 决策与验收，但没有任何数据支持“更省 Token 或更便宜”。
 
-两轮都是单任务、单模型或模型未确认的案例，不是普遍性收益承诺。完整设置、结果与限制见 [run-03](docs/experiments/run-03-results.md) 与 [run-04](docs/experiments/run-04-results.md) 实验记录。
+两轮都是单任务、单模型（DeepSeek V4.1 Flash）的案例，不是普遍性收益承诺。完整设置、结果与限制见 [run-03](docs/experiments/run-03-results.md) 与 [run-04](docs/experiments/run-04-results.md) 实验记录。
 
 ## 快速开始
 
@@ -418,7 +418,7 @@ npm run check       # typecheck + test + build
 - `done_claimed` 仅表达声明，不能替代测试或人工验收；
 - 冲突不会自动裁决，必须由用户确认后用 `--resolve-conflict` 或 `resolvedConflicts` 显式关闭；
 - TRAE 原生命令依赖当前工作区根目录下的 `.trae/commands/`；文件格式已按本机 TRAE 运行时校验，但不同版本或旧窗口可能需要在重载后才会显示；
-- Benchmark 已跑 run-01（B 无效）、run-02（A/B 有效）、run-03（A/B 有效，任务卡 v2）与 run-04（A/B 有效，A 使用 `resume --compact`，模型未确认）；run-04 两臂均 0 重复任务、Token 不可得，平台积分 A 33.13 / B 24.77（用户提供，A 高 33.8%），compact 未降低平台成本；正式量化结论尚未发布；
+- Benchmark 已跑 run-01（B 无效）、run-02（A/B 有效）、run-03（A/B 有效，任务卡 v2）与 run-04（A/B 有效，A 使用 `resume --compact`，两臂均为 DeepSeek V4.1 Flash）；run-04 两臂均 0 重复任务、Token 不可得，平台积分 A 33.13 / B 24.77（用户提供，A 高 33.8%），compact 未降低平台成本；正式量化结论尚未发布；
 - 快照是线性的，暂不提供跨分支语义检索；
 - 恢复提示词当前为中文。
 

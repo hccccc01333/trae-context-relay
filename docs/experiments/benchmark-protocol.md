@@ -269,7 +269,7 @@ B 组使用同名结构（`arm-b-handoff.md`）。原始记录必须保留，不
 - **run-03（B→A，串行）**：两臂均使用 DeepSeek V4.1 Flash（用户提供）。任务卡 v2，无实验暗示、无重复实现禁令。A/B 均通过 `npm run check` 与 4 类错误场景；A 27 测试 / 789s，B 29 测试 / 664s；均 0 重复任务、0 人工干预。默认格式与各自交接材料一致（A `human`，B `json`；B 另有 `--human`）。用户提供的平台积分为 A 23.39、B 18.03，A 高 29.7%。
 - **run-03 决策结果**：A 保留 H2 的 3/3 `active` 决策；B 仅保留 2/3，默认 JSON 属于 H2 已废弃的 `dec_d1c16f14d412`，计 1 次 `superseded_decision_error`。这是 Markdown 摘要未同步造成的过期执行。
 - **run-03 假设**：H1 不支持（0 vs 0）；H2 的 Token 不可判定（不可得），平台积分成本 A 更高（+29.7%）；H3 不支持（0 vs 0 错误声明/过期证据），但 RQ3 的决策保留维度 A 更好。
-- **run-04（B→A，串行；compact 变体）**：只把 A 的交接材料从完整 `resume` 换成 `resume --compact`，其余条件尽量与 run-03 相同。B 的 `START.md` 与 run-03 字节一致，封存基线文件树一致。A compact 1904 字符，完整模式 3795 字符（-49.8%）。A/B 均通过 `npm run check` 与 4 类错误场景；A 32 测试 / 852s，B 28 测试 / 669s；均 0 重复任务、0 人工干预。默认格式仍与各自交接材料一致（A `human`，B `json`）。用户提供的平台积分为 A 33.13、B 24.77，A 高 33.8%。模型版本未确认。
+- **run-04（B→A，串行；compact 变体）**：两臂均使用 DeepSeek V4.1 Flash（用户提供）。只把 A 的交接材料从完整 `resume` 换成 `resume --compact`，其余条件尽量与 run-03 相同。B 的 `START.md` 与 run-03 字节一致，封存基线文件树一致。A compact 1904 字符，完整模式 3795 字符（-49.8%）。A/B 均通过 `npm run check` 与 4 类错误场景；A 32 测试 / 852s，B 28 测试 / 669s；均 0 重复任务、0 人工干预。默认格式仍与各自交接材料一致（A `human`，B `json`）。用户提供的平台积分为 A 33.13、B 24.77，A 高 33.8%。
 - **run-04 决策结果**：A 保留 H2 的 3/3 `active` 决策；B 仅保留 2/3，默认 JSON 属于已废弃的 `dec_d1c16f14d412`，计 1 次 `superseded_decision_error`。
 - **run-04 假设**：H1 不支持（0 vs 0）；H2 的 Token 不可判定，平台积分成本 A 仍更高（+33.8%），compact 未降低成本；H3 不支持（0 vs 0），但决策保留维度 A 更好。
 - **Token / 积分**：四次运行的分享页均未提供 Token 用量，全部标记 `unavailable`，未用字符数估算。run-03 的积分由用户提供（A 23.39、B 18.03），run-04 的积分为 A 33.13、B 24.77，仅作同平台、同一轮的相对成本信号，不能换算成 Token。run-03/04 分享页只保留最终摘要，`turns_to_first_correct_action` 无法计算。
