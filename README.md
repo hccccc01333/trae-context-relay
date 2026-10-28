@@ -53,11 +53,11 @@ ContextRelay 还在早期。比起 star，我更想收集真实场景：
 - 不自动修改、回滚或删除用户源码；
 - 不上传快照到云端。
 
-## 一次真实 A/B 的发现
+## 真实 A/B 的发现
 
-在单轮受控实验（同一封存基线、同一任务卡、DeepSeek V4.1 Flash）中：
+在两轮受控实验（同一封存基线、同一任务卡、串行执行）中：
 
-| 指标 | A：ContextRelay | B：Markdown 摘要 |
+| 指标 | run-03 A：`resume` | run-03 B：Markdown 摘要 |
 | --- | ---: | ---: |
 | 最新有效决策保留 | 3/3 | 2/3 |
 | 执行已废弃决策 | 0 | 1 |
@@ -66,9 +66,23 @@ ContextRelay 还在早期。比起 star，我更想收集真实场景：
 | 平台积分 | 23.39 | 18.03 |
 | 会话时长 | 13m 9s | 11m 4s |
 
-结论：**它买到的是“决策新鲜度”，不是“更便宜”。** A 的平台积分高 29.7%，时长多 18.8%；Token 用量不可得。两臂都没有重复任务，因此这次没有证明“减少重复开发”。
+run-03 使用 DeepSeek V4.1 Flash；结论：**它买到的是“决策新鲜度”，不是“更便宜”。** A 的平台积分高 29.7%，时长多 18.8%；Token 用量不可得。两臂都没有重复任务，因此这次没有证明“减少重复开发”。
 
-这是单轮、单模型、单任务案例，不是普遍性收益承诺。完整设置、结果与限制见 [run-03 实验记录](docs/experiments/run-03-results.md)。
+run-04 只把 A 的交接材料换成 `resume --compact`，B 摘要与任务卡保持不变（该轮模型未确认）：
+
+| 指标 | run-04 A：`resume --compact` | run-04 B：Markdown 摘要 |
+| --- | ---: | ---: |
+| 交接材料 | 1904 字符（较完整模式 -49.8%） | 1149 字符 |
+| 最新有效决策保留 | 3/3 | 2/3 |
+| 执行已废弃决策 | 0 | 1 |
+| 重复任务 | 0 | 0 |
+| 验收 | 通过 | 通过 |
+| 平台积分 | 33.13 | 24.77 |
+| 会话时长 | 14m 12s | 11m 9s |
+
+**compact 缩短了交接材料，但没有降低平台成本**：A 的积分仍比 B 高 33.8%，时长多 27.4%。它本轮保住了 3/3 决策与验收，但没有任何数据支持“更省 Token 或更便宜”。
+
+两轮都是单任务、单模型或模型未确认的案例，不是普遍性收益承诺。完整设置、结果与限制见 [run-03](docs/experiments/run-03-results.md) 与 [run-04](docs/experiments/run-04-results.md) 实验记录。
 
 ## 快速开始
 
@@ -209,13 +223,15 @@ context-relay resume
 context-relay resume --json
 ```
 
-成本敏感的场景可以使用紧凑版：
+需要缩短交接材料时可以使用紧凑版：
 
 ```bash
 context-relay resume --compact
 ```
 
 紧凑版保留目标、未解决冲突、active/superseded 决策、任务状态、下一步和异常证据；省略“已验证”文件的逐项列表与完整 Git 文件清单。默认输出不变；`--compact --json` 会在结果中标记 `compact: true`。
+
+> 紧凑版只减少交接材料的字符数，不保证降低 Token 或平台积分。run-04 中材料减少 49.8%，但 A 组平台积分仍高于 Markdown 摘要组（详见 [run-04 实验记录](docs/experiments/run-04-results.md)）。
 
 查看历史快照：
 
@@ -379,7 +395,7 @@ npm run check       # typecheck + test + build
 
 - **v0.2**：CLI + Git 证据 + 跨会话恢复
 - **v0.3**：冲突检测、任务状态历史、决策变更追踪、schema v2 迁移（当前）
-- **v0.4**：补 Token 计量与更多轮 A/B，压缩 resume；run-03 已完成单轮案例（见 [实验记录](docs/experiments/run-03-results.md)）
+- **v0.4**：补 Token 计量与更多轮 A/B；`resume --compact` 已完成单轮测试（run-04：交接材料 -49.8%，但平台积分未下降，见 [实验记录](docs/experiments/run-04-results.md)）
 - **v1.0**：完整 TRAE Skill 工作流与可视化界面
 
 ## 实验记录
@@ -387,11 +403,12 @@ npm run check       # typecheck + test + build
 - [v0.2 自我 dogfooding](docs/experiments/v0.2-dogfooding.md)：真实仓库快照、跨进程恢复与 TRAE 新会话验证。
 - [v0.3 自我 dogfooding](docs/experiments/v0.3-dogfooding.md)：任务重新打开、决策 `supersedes`、冲突恢复提示词与 v1 快照迁移。
 - [run-03 结果](docs/experiments/run-03-results.md)：单轮 A/B 中决策保留 3/3 vs 2/3，平台积分高 29.7%，Token 不可得。
+- [run-04 结果](docs/experiments/run-04-results.md)：A 改用 `resume --compact`；交接材料 -49.8%，决策保留 3/3 vs 2/3，平台积分 A 33.13 / B 24.77（A 高 33.8%）。
 - [Benchmark 协议](docs/experiments/benchmark-protocol.md)：ContextRelay vs Markdown 摘要的重复任务数与 Token 对照实验。
-- [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`（v1 用于 run-01/02；[v2](docs/experiments/benchmark-tasks/diff-command-v2.md) 用于 run-03）。
+- [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`（v1 用于 run-01/02；[v2](docs/experiments/benchmark-tasks/diff-command-v2.md) 用于 run-03/04）。
 - [Benchmark 评分表](docs/experiments/benchmark-scorecard.md)：每次运行必须保留的原始指标。
 
-> 已完成 2 轮有效 A/B（run-02、run-03）与 run-01 的 1 次有效 A 会话。run-03 的 H1（重复任务）未获支持（两臂均 0）、H2 的 Token 不可得（用户提供的平台积分 A 23.39 / B 18.03，A 高 29.7%，仅作成本代理）、H3 未获支持（两臂错误数均 0）；决策保留 A 3/3、B 2/3。样本仍不足以发布总体量化结论。
+> 已完成 3 轮有效 A/B（run-02、run-03、run-04）与 run-01 的 1 次有效 A 会话。run-03 的 H1（重复任务）未获支持（两臂均 0）、H2 的 Token 不可得（用户提供的平台积分 A 23.39 / B 18.03，A 高 29.7%，仅作成本代理）、H3 未获支持（两臂错误数均 0）；决策保留 A 3/3、B 2/3。run-04 把 A 换成 compact 后，交接材料从 3795 降到 1904 字符（-49.8%），但仍为 A 33.13 / B 24.77（A 高 33.8%），决策保留与验收结果不变。样本仍不足以发布总体量化结论。
 
 ## 已知限制
 
@@ -401,7 +418,7 @@ npm run check       # typecheck + test + build
 - `done_claimed` 仅表达声明，不能替代测试或人工验收；
 - 冲突不会自动裁决，必须由用户确认后用 `--resolve-conflict` 或 `resolvedConflicts` 显式关闭；
 - TRAE 原生命令依赖当前工作区根目录下的 `.trae/commands/`；文件格式已按本机 TRAE 运行时校验，但不同版本或旧窗口可能需要在重载后才会显示；
-- Benchmark 已跑 run-01（B 无效）、run-02（A/B 有效）与 run-03（A/B 有效，任务卡 v2）；run-03 两臂均 0 重复任务、Token 不可得，平台积分 A 23.39 / B 18.03（用户提供，A 高 29.7%），正式量化结论尚未发布；
+- Benchmark 已跑 run-01（B 无效）、run-02（A/B 有效）、run-03（A/B 有效，任务卡 v2）与 run-04（A/B 有效，A 使用 `resume --compact`，模型未确认）；run-04 两臂均 0 重复任务、Token 不可得，平台积分 A 33.13 / B 24.77（用户提供，A 高 33.8%），compact 未降低平台成本；正式量化结论尚未发布；
 - 快照是线性的，暂不提供跨分支语义检索；
 - 恢复提示词当前为中文。
 
