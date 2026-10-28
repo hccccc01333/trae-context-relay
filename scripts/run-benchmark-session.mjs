@@ -722,14 +722,15 @@ async function verify(argv) {
 
   git(["add", "-N", "."], armDir);
   const diff = run("git", ["diff"], { cwd: armDir }).stdout;
-  git(["reset", "--quiet"], armDir);
-  await writeFile(path.join(benchDir, "final.diff"), diff, "utf8");
-
-  const changedFiles = git(["diff", "--name-only"], armDir).split(/\r?\n/).filter(Boolean);
+  const changedFiles = git(["diff", "--name-only"], armDir)
+    .split(/\r?\n/)
+    .filter(Boolean);
   const dependencyDiff = git(
     ["diff", "--", "package.json", "package-lock.json", "src/core/schema.ts"],
     armDir,
   );
+  git(["reset", "--quiet"], armDir);
+  await writeFile(path.join(benchDir, "final.diff"), diff, "utf8");
 
   const snapshots = [];
   const snapshotDir = path.join(armDir, ".context-relay", "snapshots");
