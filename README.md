@@ -27,7 +27,7 @@ ContextRelay 还在早期。比起 star，我更想收集真实场景：
 - 文件已经变化，Agent 仍在引用旧结论；
 - 交接材料太长、太贵，或者 Agent 根本没读。
 
-如果你遇到过，欢迎[开 Issue](https://github.com/hccccc01333/context-relay/issues/new)。请先脱敏，不要贴密钥、私有源码或完整聊天记录；只要能描述“上一会话的结论 → 新会话的错误动作”即可。我会把可复现的案例做成 fixture，并把结果公开在 [Benchmark 协议](docs/experiments/benchmark-protocol.md) 中。
+如果你遇到过，欢迎[开 Issue](https://github.com/hccccc01333/trae-context-relay/issues/new)。请先脱敏，不要贴密钥、私有源码或完整聊天记录；只要能描述“上一会话的结论 → 新会话的错误动作”即可。我会把可复现的案例做成 fixture，并把结果公开在 [Benchmark 协议](docs/experiments/benchmark-protocol.md) 中。
 
 ## v0.3 能力
 
