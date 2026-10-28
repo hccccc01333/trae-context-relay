@@ -56,6 +56,7 @@ export interface GitVerification {
 
 export interface ResumeResult {
   ok: true;
+  compact: boolean;
   generatedAt: string;
   snapshotId: string;
   snapshotCreatedAt: string;

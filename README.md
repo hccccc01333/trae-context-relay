@@ -35,7 +35,7 @@ ContextRelay 还在早期。比起 star，我更想收集真实场景：
 | --- | --- |
 | 上下文捕获 | `context-relay capture` 读取 Git、工作区文件、目录树、项目元数据和显式会话信息 |
 | 可验证证据 | 文件 SHA-256、Git HEAD/分支/祖先关系/工作区状态 |
-| 上下文恢复 | `context-relay resume` 生成差异化校验结果和中文恢复提示词 |
+| 上下文恢复 | `context-relay resume` 生成差异化校验结果和中文恢复提示词，支持 `--compact` |
 | 增量记忆 | 快照不可变、继承目标与决策、更新任务状态、记录父子差异 |
 | 冲突检测 | 任务被重新打开、阻塞任务被声明完成、同摘要不同理由的决策冲突；冲突写入快照并在恢复提示词中强制确认 |
 | 任务状态历史 | 每个任务保存 `statusHistory`，恢复时能看到 `todo → done_claimed → in_progress` 等真实变化 |
@@ -206,6 +206,14 @@ context-relay resume
 ```bash
 context-relay resume --json
 ```
+
+成本敏感的场景可以使用紧凑版：
+
+```bash
+context-relay resume --compact
+```
+
+紧凑版保留目标、未解决冲突、active/superseded 决策、任务状态、下一步和异常证据；省略“已验证”文件的逐项列表与完整 Git 文件清单。默认输出不变；`--compact --json` 会在结果中标记 `compact: true`。
 
 查看历史快照：
 

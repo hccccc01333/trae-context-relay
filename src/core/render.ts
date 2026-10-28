@@ -464,6 +464,234 @@ function renderWarnings(warnings: string[]): string {
   return [...new Set(all)].map((warning) => `- ${warning}`).join("\n");
 }
 
+const COMPACT_TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: "未开始",
+  in_progress: "进行中",
+  blocked: "阻塞",
+  done_claimed: "声明完成（未验证）",
+};
+
+function renderCompactDecision(decision: Decision): string {
+  return `- ${decision.summary}（${codeSpan(decision.id)}，rev ${decision.revision}）`;
+}
+
+function renderCompactConflict(conflict: Conflict): string {
+  return `- [${CONFLICT_KIND_LABELS[conflict.kind]}] ${conflict.subjectLabel}（${codeSpan(conflict.id)}）：${conflict.previous} → ${conflict.incoming}`;
+}
+
+function renderCompactTask(task: Task): string {
+  const history =
+    task.statusHistory.length > 1
+      ? `（状态历史：${task.statusHistory.map((entry) => entry.to).join(" → ")}）`
+      : "";
+  return `- [${COMPACT_TASK_STATUS_LABELS[task.status]}] ${task.title}${history}`;
+}
+
+function compactWarnings(warnings: string[]): string {
+  const notable = warnings.filter(
+    (warning) =>
+      !/冲突|哈希变化|缺失|没有文件证据/.test(warning),
+  );
+  if (notable.length === 0) {
+    return "";
+  }
+  const shown = notable.slice(0, 6);
+  const lines = shown.map(
+    (warning) => `- ${warning.replace(/\s+/g, " ").trim()}`,
+  );
+  if (notable.length > shown.length) {
+    lines.push(`- ... 另有 ${notable.length - shown.length} 条警告`);
+  }
+  return ["## 其他注意", "", ...lines].join("\n");
+}
+
+/**
+ * A shorter recovery prompt for cost-sensitive handoffs. It keeps the
+ * decision/conflict state and only lists evidence that is not verified.
+ */
+export function renderCompactResumePrompt(
+  result: ResumeResult,
+): string {
+  const active = result.context.decisions.filter(
+    (decision) => decision.status === "active",
+  );
+  const superseded = result.context.decisions.filter(
+    (decision) => decision.status === "superseded",
+  );
+  const evidenceIssues = result.evidence.checks.filter(
+    (check) => check.status !== "verified",
+  );
+  const rootLine = result.rootMatches
+    ? `- 项目根：${codeSpan(result.currentRoot)}（与快照一致）`
+    : `- 项目根：${codeSpan(result.currentRoot)}；快照根：${codeSpan(result.snapshotRoot)}（不一致，证据已按当前目录重算）`;
+
+  const changedFiles = [
+    ...new Set([
+      ...result.git.committedChanges,
+      ...result.git.workingTree.newChanges,
+      ...result.git.workingTree.resolvedChanges,
+    ]),
+  ];
+
+  const sections: string[] = [
+    "# 跨会话恢复提示（ContextRelay · 紧凑版）",
+    "",
+    "> 任务“声明完成”不是功能完成；SHA-256 一致不代表测试通过。先核验，再修改。",
+    "",
+    "## 快照",
+    "",
+    `- 快照 ID：${codeSpan(result.snapshotId)}`,
+    `- 快照文件：${codeSpan(result.snapshotPath)}`,
+    rootLine,
+    "- 功能验证：未验证",
+    "",
+    "## 强制约束",
+    "",
+    "- 未解决冲突必须逐条询问用户，不能自行裁决。",
+    "- 只执行 status=active 的决策；superseded 只能用于理解历史。",
+    "- 证据变化、缺失或无法验证时，先检查现状，不要沿用旧结论。",
+    "- 不要重复实现快照中已经存在的同一功能。",
+    "- 未实际运行测试，不得声称功能已完成。",
+    "",
+    "## 项目目标",
+    "",
+    result.context.goal ?? "快照没有记录明确目标。开始前先与用户确认目标。",
+    "",
+    `## 未解决冲突（${result.conflicts.length}，必须先与用户确认）`,
+    "",
+    result.conflicts.length === 0
+      ? "无。"
+      : result.conflicts.map(renderCompactConflict).join("\n"),
+    "",
+    `## 当前有效决策（${active.length}）`,
+    "",
+    active.length === 0
+      ? "未记录。"
+      : active.map(renderCompactDecision).join("\n"),
+  ];
+
+  if (superseded.length > 0) {
+    sections.push(
+      "",
+      `## 已废弃决策（${superseded.length}，勿执行）`,
+      "",
+      superseded
+        .map((decision) => {
+          const by = decision.supersededBy
+            ? `，被 ${codeSpan(decision.supersededBy)} 替代`
+            : "";
+          return `- ${decision.summary}（${codeSpan(decision.id)}${by}）`;
+        })
+        .join("\n"),
+    );
+  }
+
+  sections.push(
+    "",
+    "## 任务状态（自述，未验证）",
+    "",
+    result.context.tasks.length === 0
+      ? "未记录任务。"
+      : result.context.tasks.map(renderCompactTask).join("\n"),
+    "",
+    "## 文件证据核验",
+    "",
+    `- 共 ${result.evidence.summary.total} 个；已验证 ${result.evidence.summary.verified}，变化 ${result.evidence.summary.changed}，缺失 ${result.evidence.summary.missing}，无法验证 ${result.evidence.summary.unverifiable}`,
+  );
+
+  if (evidenceIssues.length === 0) {
+    sections.push("- 异常：无。");
+  } else {
+    sections.push(
+      "- 异常：",
+      evidenceIssues
+        .slice(0, 12)
+        .map(formatEvidenceCheck)
+        .join("\n"),
+    );
+    if (evidenceIssues.length > 12) {
+      sections.push(`- ... 另有 ${evidenceIssues.length - 12} 项异常`);
+    }
+  }
+
+  sections.push(
+    "",
+    "## Git",
+    "",
+    `- 关系：${GIT_RELATION_LABELS[result.git.relation]}`,
+    `- 当前 HEAD：${
+      result.git.currentHead
+        ? codeSpan(result.git.currentHeadShort ?? result.git.currentHead)
+        : "尚无提交"
+    }`,
+  );
+
+  if (result.git.workingTree.comparable) {
+    sections.push(
+      `- 工作区：${result.git.workingTree.same ? "与快照一致" : "与快照不同"}`,
+    );
+  }
+
+  if (changedFiles.length > 0) {
+    sections.push(
+      `- 涉及文件：${changedFiles.length} 个（运行 git status 查看具体路径）`,
+    );
+  }
+
+  if (result.git.notes.length > 0) {
+    sections.push(
+      `- 说明：${result.git.notes
+        .map((note) => note.replace(/\s+/g, " ").trim())
+        .join("；")}`,
+    );
+  }
+
+  sections.push(
+    "",
+    "## 下一步（开始前重新确认）",
+    "",
+    result.context.nextSteps.length === 0
+      ? "未记录。"
+      : result.context.nextSteps.map((step) => `- ${step}`).join("\n"),
+  );
+
+  if (result.context.notes.length > 0) {
+    sections.push(
+      "",
+      "## 备注",
+      "",
+      result.context.notes
+        .slice(0, 2)
+        .map((note) => `- ${note}`)
+        .join("\n"),
+    );
+  }
+
+  sections.push(
+    "",
+    "## 恢复后的第一轮行动",
+    "",
+    "1. 运行 `git status`，核对 Git 与异常证据。",
+    "2. 有未解决冲突时，先逐条问用户。",
+    "3. 复述目标、active 决策、下一步后再开始。",
+  );
+
+  const warnings = compactWarnings(result.warnings);
+  if (warnings.length > 0) {
+    sections.push("", warnings);
+  }
+
+  sections.push(
+    "",
+    "## 验证边界",
+    "",
+    "文件与 Git 证据只证明快照时刻记录一致，不证明测试通过、功能可用或代码质量达标。",
+    "",
+  );
+
+  return sections.join("\n");
+}
+
 export function renderResumePrompt(result: ResumeResult, snapshot: Snapshot): string {
   return [
     "# 跨会话恢复提示（ContextRelay）",

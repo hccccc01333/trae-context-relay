@@ -442,6 +442,33 @@ describe("cross-session recovery (E2E)", () => {
     expect(resume.prompt).toContain("Use SHA-256 plus Git evidence");
     expect(resume.prompt).toContain("rev 2");
     expect(resume.prompt).toContain("状态历史：done_claimed → in_progress");
+    expect(resume.compact).toBe(false);
+
+    const compactResult = runCli(root, [
+      "resume",
+      "--compact",
+      "--json",
+    ]);
+    expectCliSuccess(compactResult);
+    const compact = parseJsonOutput<ResumeResult>(compactResult.stdout);
+    expect(compact.compact).toBe(true);
+    expect(compact.prompt.length).toBeLessThan(resume.prompt.length);
+    expect(compact.prompt).toContain("紧凑版");
+    expect(compact.prompt).toContain("未解决冲突（1");
+    expect(compact.prompt).toContain("任务被重新打开");
+    expect(compact.prompt).toContain("当前有效决策（1）");
+    expect(compact.prompt).toContain("已废弃决策（1");
+    expect(compact.prompt).toContain("Use SHA-256 plus Git evidence");
+    expect(compact.prompt).toContain("rev 2");
+    expect(compact.prompt).toContain("状态历史：done_claimed → in_progress");
+    expect(compact.prompt).not.toContain("### 已验证（哈希一致）");
+
+    const compactText = runCli(root, ["resume", "--compact"]);
+    expectCliSuccess(compactText);
+    expect(compactText.stdout).toContain(
+      "# 跨会话恢复提示（ContextRelay · 紧凑版）",
+    );
+    expect(compactText.stdout).not.toContain("### 已验证（哈希一致）");
 
     const conflictId = second.snapshot.conflicts[0]?.id;
     expect(conflictId).toBeDefined();

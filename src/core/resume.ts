@@ -11,7 +11,7 @@ import {
   isAncestor,
 } from "./git.js";
 import { EvidenceReadError, fingerprintFile } from "./hash.js";
-import { renderResumePrompt } from "./render.js";
+import { renderCompactResumePrompt, renderResumePrompt } from "./render.js";
 import type {
   EvidenceCheck,
   EvidenceSummary,
@@ -32,6 +32,7 @@ import { dedupeText } from "../utils/text.js";
 export interface ResumeOptions {
   cwd: string;
   snapshotId?: string;
+  compact?: boolean;
 }
 
 function isSamePath(left: string, right: string): boolean {
@@ -358,6 +359,7 @@ export async function resumeProject(
 
   const result: ResumeResult = {
     ok: true,
+    compact: options.compact === true,
     generatedAt: new Date().toISOString(),
     snapshotId: snapshot.id,
     snapshotCreatedAt: snapshot.createdAt,
@@ -380,6 +382,8 @@ export async function resumeProject(
     prompt: "",
   };
 
-  result.prompt = renderResumePrompt(result, snapshot);
+  result.prompt = result.compact
+    ? renderCompactResumePrompt(result)
+    : renderResumePrompt(result, snapshot);
   return result;
 }

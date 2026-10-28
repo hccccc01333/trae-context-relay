@@ -4,6 +4,7 @@ import { writeJson } from "./io.js";
 export interface ResumeCliInput {
   cwd: string;
   snapshotId?: string;
+  compact: boolean;
   json: boolean;
 }
 
@@ -13,6 +14,7 @@ export async function runResumeCommand(
   const result = await resumeProject({
     cwd: input.cwd,
     snapshotId: input.snapshotId,
+    compact: input.compact,
   });
 
   if (input.json) {

@@ -67,11 +67,13 @@ program
     "Verify the latest snapshot against the current project and print a recovery prompt.",
   )
   .option("--snapshot <id>", "use a specific snapshot id instead of the latest")
+  .option("--compact", "print a shorter recovery prompt", false)
   .option("--json", "print machine-readable JSON", false)
-  .action(async (options: { snapshot?: string; json: boolean }) => {
+  .action(async (options: { snapshot?: string; compact: boolean; json: boolean }) => {
     await runResumeCommand({
       cwd: process.cwd(),
       snapshotId: options.snapshot,
+      compact: options.compact,
       json: options.json,
     });
   });
