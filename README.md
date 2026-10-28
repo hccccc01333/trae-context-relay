@@ -1,5 +1,7 @@
 # ContextRelay
 
+[![CI](https://github.com/hccccc01333/trae-context-relay/actions/workflows/ci.yml/badge.svg)](https://github.com/hccccc01333/trae-context-relay/actions/workflows/ci.yml)
+
 **让 AI Coding Agent 在新会话里恢复“可验证的项目状态”，而不是盲目相信上一段聊天摘要。**
 
 ContextRelay 是一个本地优先的上下文交接与恢复引擎。它为 TRAE 等 AI Coding 工具提供可执行 CLI：用 Git 和文件 SHA-256 证据保存项目状态，并在新会话中区分“已验证 / 已变化 / 缺失 / 无法验证”，再生成一份恢复提示词。
