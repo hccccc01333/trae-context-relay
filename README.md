@@ -352,7 +352,7 @@ npm run check       # typecheck + test + build
 - [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`（v1 用于 run-01/02；[v2](docs/experiments/benchmark-tasks/diff-command-v2.md) 用于 run-03）。
 - [Benchmark 评分表](docs/experiments/benchmark-scorecard.md)：每次运行必须保留的原始指标。
 
-> 已完成 2 轮有效 A/B（run-02、run-03）与 run-01 的 1 次有效 A 会话。run-03 的 H1（重复任务）未获支持（两臂均 0）、H2（Token）因用量不可得无法判定、H3 未获支持（两臂错误数均 0）；决策保留 A 3/3、B 2/3。样本仍不足以发布总体量化结论。
+> 已完成 2 轮有效 A/B（run-02、run-03）与 run-01 的 1 次有效 A 会话。run-03 的 H1（重复任务）未获支持（两臂均 0）、H2 的 Token 不可得（用户提供的平台积分 A 23.39 / B 18.03，A 高 29.7%，仅作成本代理）、H3 未获支持（两臂错误数均 0）；决策保留 A 3/3、B 2/3。样本仍不足以发布总体量化结论。
 
 ## 已知限制
 
@@ -362,7 +362,7 @@ npm run check       # typecheck + test + build
 - `done_claimed` 仅表达声明，不能替代测试或人工验收；
 - 冲突不会自动裁决，必须由用户确认后用 `--resolve-conflict` 或 `resolvedConflicts` 显式关闭；
 - TRAE 原生命令依赖当前工作区根目录下的 `.trae/commands/`；文件格式已按本机 TRAE 运行时校验，但不同版本或旧窗口可能需要在重载后才会显示；
-- Benchmark 已跑 run-01（B 无效）、run-02（A/B 有效）与 run-03（A/B 有效，任务卡 v2）；run-03 两臂均 0 重复任务、Token 不可得，正式量化结论尚未发布；
+- Benchmark 已跑 run-01（B 无效）、run-02（A/B 有效）与 run-03（A/B 有效，任务卡 v2）；run-03 两臂均 0 重复任务、Token 不可得，平台积分 A 23.39 / B 18.03（用户提供，A 高 29.7%），正式量化结论尚未发布；
 - 快照是线性的，暂不提供跨分支语义检索；
 - 恢复提示词当前为中文。
 
