@@ -18,6 +18,17 @@ ContextRelay 是一个本地优先的上下文交接与恢复引擎。它为 TRA
 
 ContextRelay 的原则是：**上下文可以来自 Agent，但结论必须有证据边界。**
 
+## 邀请：给我一个真实的跨会话失效案例
+
+ContextRelay 还在早期。比起 star，我更想收集真实场景：
+
+- 新会话把已经废弃的决策又执行了一遍；
+- 任务被重新打开，但 Agent 仍按“已完成”继续；
+- 文件已经变化，Agent 仍在引用旧结论；
+- 交接材料太长、太贵，或者 Agent 根本没读。
+
+如果你遇到过，欢迎[开 Issue](https://github.com/hccccc01333/context-relay/issues/new)。请先脱敏，不要贴密钥、私有源码或完整聊天记录；只要能描述“上一会话的结论 → 新会话的错误动作”即可。我会把可复现的案例做成 fixture，并把结果公开在 [Benchmark 协议](docs/experiments/benchmark-protocol.md) 中。
+
 ## v0.3 能力
 
 | 能力 | 实现 |
@@ -39,6 +50,23 @@ ContextRelay 的原则是：**上下文可以来自 Agent，但结论必须有�
 - 不因为文件存在就宣称功能完成；
 - 不自动修改、回滚或删除用户源码；
 - 不上传快照到云端。
+
+## 一次真实 A/B 的发现
+
+在单轮受控实验（同一封存基线、同一任务卡、DeepSeek V4.1 Flash）中：
+
+| 指标 | A：ContextRelay | B：Markdown 摘要 |
+| --- | ---: | ---: |
+| 最新有效决策保留 | 3/3 | 2/3 |
+| 执行已废弃决策 | 0 | 1 |
+| 重复任务 | 0 | 0 |
+| 验收 | 通过 | 通过 |
+| 平台积分 | 23.39 | 18.03 |
+| 会话时长 | 13m 9s | 11m 4s |
+
+结论：**它买到的是“决策新鲜度”，不是“更便宜”。** A 的平台积分高 29.7%，时长多 18.8%；Token 用量不可得。两臂都没有重复任务，因此这次没有证明“减少重复开发”。
+
+这是单轮、单模型、单任务案例，不是普遍性收益承诺。完整设置、结果与限制见 [run-03 实验记录](docs/experiments/run-03-results.md)。
 
 ## 快速开始
 
@@ -341,13 +369,14 @@ npm run check       # typecheck + test + build
 
 - **v0.2**：CLI + Git 证据 + 跨会话恢复
 - **v0.3**：冲突检测、任务状态历史、决策变更追踪、schema v2 迁移（当前）
-- **v0.4**：执行 [Benchmark 协议](docs/experiments/benchmark-protocol.md)，对比 ContextRelay 与 Markdown 摘要的重复任务数和 Token 消耗
+- **v0.4**：补 Token 计量与更多轮 A/B，压缩 resume；run-03 已完成单轮案例（见 [实验记录](docs/experiments/run-03-results.md)）
 - **v1.0**：完整 TRAE Skill 工作流与可视化界面
 
 ## 实验记录
 
 - [v0.2 自我 dogfooding](docs/experiments/v0.2-dogfooding.md)：真实仓库快照、跨进程恢复与 TRAE 新会话验证。
 - [v0.3 自我 dogfooding](docs/experiments/v0.3-dogfooding.md)：任务重新打开、决策 `supersedes`、冲突恢复提示词与 v1 快照迁移。
+- [run-03 结果](docs/experiments/run-03-results.md)：单轮 A/B 中决策保留 3/3 vs 2/3，平台积分高 29.7%，Token 不可得。
 - [Benchmark 协议](docs/experiments/benchmark-protocol.md)：ContextRelay vs Markdown 摘要的重复任务数与 Token 对照实验。
 - [Benchmark 任务卡](docs/experiments/benchmark-tasks/diff-command.md)：真实新会话任务 `context-relay diff`（v1 用于 run-01/02；[v2](docs/experiments/benchmark-tasks/diff-command-v2.md) 用于 run-03）。
 - [Benchmark 评分表](docs/experiments/benchmark-scorecard.md)：每次运行必须保留的原始指标。
