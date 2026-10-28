@@ -211,8 +211,10 @@ function buildArm(armDir) {
 
 function nodeCli(armDir, args, options = {}) {
   // Use an absolute CLI path so verification can run the built binary against
-  // a temporary repository without copying dist/ into it.
-  const result = run(process.execPath, [path.join(armDir, "dist", "cli.js"), ...args], {
+  // a temporary repository without copying dist/ into it. `cliDir` lets the
+  // compact handoff use the current repo CLI while reading arm snapshots.
+  const cliDir = options.cliDir ?? armDir;
+  const result = run(process.execPath, [path.join(cliDir, "dist", "cli.js"), ...args], {
     cwd: options.cwd ?? armDir,
     allowFailure: options.allowFailure ?? false,
   });
@@ -318,7 +320,11 @@ async function scanLeaks(root, label, allowSet) {
   }
 }
 
-function writeRunGuide({ runId, sealed, h1, h2, promptA, promptB, handoffAChars, handoffBChars }) {
+function writeRunGuide({ runId, sealed, h1, h2, promptA, promptB, handoffAChars, handoffBChars, resumeMode, fullHandoffChars }) {
+  const handoffNote =
+    resumeMode === "compact"
+      ? `${handoffAChars} 字符（compact；同一快照的完整模式为 ${fullHandoffChars} 字符）`
+      : `${handoffAChars} 字符（完整模式）`;
   return `# ${runId} 执行清单
 
 > 协议变更（相对 run-01）：任务卡不再放入任何 arm 工作区，arm 仓库为封存基线。
@@ -327,8 +333,9 @@ function writeRunGuide({ runId, sealed, h1, h2, promptA, promptB, handoffAChars,
 - 封存基线提交：\`${sealed.head}\`
 - H1 快照：\`${h1.id}\`
 - H2 快照：\`${h2.id}\`
-- A 交接材料：${handoffAChars} 字符
+- A 交接材料：${handoffNote}
 - B 交接材料：${handoffBChars} 字符
+- 交接模式：A \`${resumeMode}\`；B 手工 Markdown
 - 提示词目录（在工作区之外）：\`${KIT_ROOT}\\${runId}\`
 
 ## 操作步骤（两组相同）
@@ -361,6 +368,7 @@ async function prepare(argv) {
   const runId = valueAfter(argv, "--run") ?? "run-02";
   const baselineTag = valueAfter(argv, "--baseline") ?? "benchmark-v0.3-base";
   const force = argv.includes("--force");
+  const compact = argv.includes("--compact");
   const runDir = path.join(RUNS_ROOT, runId);
   const taskCardPath = path.resolve(valueAfter(argv, "--task-card") ?? TASK_CARD);
   const bHandoffPath = path.resolve(valueAfter(argv, "--handoff-b") ?? B_HANDOFF);
@@ -399,10 +407,50 @@ async function prepare(argv) {
   const h2 = await captureFixture(armA, "h2.json");
   assertH2(h2);
 
-  const resume = nodeCli(armA, ["resume"]);
+  const resumeCliDir = compact ? REPO_ROOT : armA;
+  if (compact) {
+    assert(
+      await exists(path.join(REPO_ROOT, "dist", "cli.js")),
+      "Compact handoff requires a built CLI at dist/cli.js",
+    );
+    const resumeHelp = nodeCli(armA, ["resume", "--help"], { cliDir: REPO_ROOT });
+    assert(
+      resumeHelp.stdout.includes("--compact"),
+      "Current CLI does not expose resume --compact",
+    );
+  }
+
+  const resumeArgs = compact ? ["resume", "--compact"] : ["resume"];
+  const resume = nodeCli(armA, resumeArgs, { cliDir: resumeCliDir });
   assert(resume.stdout.includes(h2.id), "A resume does not reference H2");
   assert(resume.stdout.includes("未解决冲突"), "A resume lost the conflict section");
-  assert(resume.stdout.includes("已被替代的决策"), "A resume lost superseded decisions");
+  if (compact) {
+    assert(resume.stdout.includes("紧凑版"), "Compact resume lost its header");
+    assert(
+      resume.stdout.includes("已废弃决策"),
+      "Compact resume lost superseded decisions",
+    );
+    assert(
+      !resume.stdout.includes("### 已验证（哈希一致）"),
+      "Compact resume leaked the full verified-file list",
+    );
+  } else {
+    assert(resume.stdout.includes("已被替代的决策"), "A resume lost superseded decisions");
+  }
+
+  let fullHandoffChars = resume.stdout.length;
+  if (compact) {
+    const fullResume = nodeCli(armA, ["resume"], { cliDir: REPO_ROOT });
+    assert(
+      fullResume.stdout.includes("已被替代的决策"),
+      "Full resume lost superseded decisions",
+    );
+    assert(
+      fullResume.stdout.length > resume.stdout.length,
+      "Compact resume is not shorter than the full resume",
+    );
+    fullHandoffChars = fullResume.stdout.length;
+  }
 
   await mkdir(path.join(armA, "benchmark"), { recursive: true });
   await writeFile(
@@ -410,10 +458,17 @@ async function prepare(argv) {
     resume.stdout,
     "utf8",
   );
-  const resumeJson = nodeCli(armA, ["resume", "--json"]);
+  const resumeJsonArgs = compact
+    ? ["resume", "--compact", "--json"]
+    : ["resume", "--json"];
+  const resumeJson = nodeCli(armA, resumeJsonArgs, { cliDir: resumeCliDir });
+  const resumeJsonParsed = JSON.parse(resumeJson.stdout.replace(/^\uFEFF/, ""));
+  if (compact) {
+    assert(resumeJsonParsed.compact === true, "Compact resume JSON lacks compact: true");
+  }
   await writeFile(
     path.join(armA, "benchmark", "arm-a-resume.json"),
-    `${JSON.stringify(JSON.parse(resumeJson.stdout.replace(/^\uFEFF/, "")), null, 2)}\n`,
+    `${JSON.stringify(resumeJsonParsed, null, 2)}\n`,
     "utf8",
   );
 
@@ -468,6 +523,7 @@ async function prepare(argv) {
     runId,
     preparedAt: new Date().toISOString(),
     protocol: "single-message handoff + task card",
+    resumeMode: compact ? "compact" : "full",
     sealedBaseline: { tag: baselineTag, original: baseline, head: sealed.head },
     snapshots: { h1: h1.id, h2: h2.id },
     materials: {
@@ -487,6 +543,7 @@ async function prepare(argv) {
         path: `A`,
         head: sealed.head,
         handoffChars: resume.stdout.length,
+        fullHandoffChars: compact ? fullHandoffChars : resume.stdout.length,
         expectedDefaultFormat: "human",
       },
       B: {
@@ -515,13 +572,16 @@ async function prepare(argv) {
       promptB,
       handoffAChars: resume.stdout.length,
       handoffBChars: bHandoff.length,
+      resumeMode: compact ? "compact" : "full",
+      fullHandoffChars: compact ? fullHandoffChars : resume.stdout.length,
     }),
     "utf8",
   );
 
   console.log(
     `${runId} prepared: sealed=${sealed.head.slice(0, 12)} H1=${h1.id} H2=${h2.id} ` +
-      `A=${resume.stdout.length} chars B=${bHandoff.length} chars`,
+      `A=${resume.stdout.length} chars (${compact ? "compact" : "full"}, ` +
+      `full=${fullHandoffChars}) B=${bHandoff.length} chars`,
   );
   console.log(`prompt A: ${promptA}`);
   console.log(`prompt B: ${promptB}`);
@@ -786,7 +846,8 @@ async function main() {
   }
   fail(
     "Usage: node scripts/run-benchmark-session.mjs <prepare|verify> " +
-      "[--run run-03] [--arm A] [--task-card <path>] [--handoff-b <path>] [--force]",
+      "[--run run-03] [--arm A] [--task-card <path>] [--handoff-b <path>] " +
+      "[--compact] [--force]",
   );
 }
 
